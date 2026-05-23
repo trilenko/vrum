@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ВРУМ — Владелец</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;600;700&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#080808;--s1:#111;--s2:#181818;--s3:#222;--border:#2a2a2a;
+  --accent:#FFD600;--green:#00E676;--red:#FF1744;--blue:#2979FF;
+  --orange:#FF6D00;--text:#F0F0F0;--muted:#555;
+  --ff:'Bebas Neue',sans-serif;--fm:'JetBrains Mono',monospace;--fb:'Manrope',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--text);font-family:var(--fb);min-height:100vh;padding-bottom:40px}
+
+.hdr{background:var(--s1);border-bottom:2px solid var(--accent);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.logo{font-family:var(--ff);font-size:24px;letter-spacing:3px;color:var(--accent)}
+.hdr-right{display:flex;align-items:center;gap:10px}
+.clock{font-family:var(--fm);font-size:11px;color:var(--muted);text-align:right}
+.clock b{display:block;color:var(--text);font-size:13px}
+.refresh-btn{background:none;border:1px solid var(--border);color:var(--muted);padding:5px 12px;border-radius:6px;font-family:var(--fm);font-size:11px;cursor:pointer}
+.refresh-btn:active{opacity:.7}
+
+/* PERIOD TABS */
+.period-tabs{display:flex;background:var(--s1);border-bottom:1px solid var(--border);overflow-x:auto}
+.ptab{flex-shrink:0;padding:10px 16px;font-family:var(--ff);font-size:14px;letter-spacing:1px;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}
+.ptab.on{color:var(--accent);border-color:var(--accent)}
+
+.content{padding:10px 12px}
+
+/* LOADING */
+.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:12px}
+.spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-family:var(--fm);font-size:12px;color:var(--muted)}
+
+.error-box{background:#1a0505;border:1px solid var(--red);border-radius:10px;padding:16px;text-align:center;margin:20px 0}
+.error-text{font-family:var(--fm);font-size:12px;color:var(--red);line-height:1.8}
+
+/* KPI CARDS */
+.kpi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px}
+.kpi{background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+.kpi.accent{border-color:var(--accent);background:#1a1500}
+.kpi-label{font-family:var(--fm);font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:4px}
+.kpi-val{font-family:var(--ff);font-size:32px;color:var(--accent);line-height:1}
+.kpi.accent .kpi-val{color:var(--accent)}
+.kpi-sub{font-family:var(--fm);font-size:9px;color:var(--muted);margin-top:3px}
+.kpi-green .kpi-val{color:var(--green)}
+.kpi-blue .kpi-val{color:var(--blue)}
+
+/* SECTION */
+.sec{margin-bottom:12px}
+.sec-title{font-family:var(--ff);font-size:16px;letter-spacing:2px;color:var(--muted);margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
+.sec-title span{font-family:var(--fm);font-size:9px;color:var(--muted)}
+
+/* POINTS COMPARISON */
+.points-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.point-card{background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:12px}
+.point-name{font-family:var(--ff);font-size:18px;color:var(--accent);margin-bottom:6px}
+.point-rev{font-family:var(--ff);font-size:28px;color:var(--text)}
+.point-cnt{font-family:var(--fm);font-size:10px;color:var(--muted);margin-top:2px}
+.point-avg{font-family:var(--fm);font-size:10px;color:var(--green);margin-top:2px}
+
+/* BAR CHART */
+.bar-chart{background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px}
+.bars{display:flex;align-items:flex-end;gap:4px;height:100px;margin-bottom:6px}
+.bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
+.bar-fill{width:100%;border-radius:3px 3px 0 0;min-height:2px;transition:height .3s ease;position:relative}
+.bar-fill.today{background:var(--accent)}
+.bar-fill.normal{background:var(--s3);border:1px solid var(--border)}
+.bar-val{font-family:var(--fm);font-size:7px;color:var(--muted);white-space:nowrap}
+.bar-label{font-family:var(--fm);font-size:8px;color:var(--muted);text-align:center}
+
+/* HOUR CHART */
+.hour-chart{background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px}
+.hour-bars{display:flex;align-items:flex-end;gap:2px;height:60px;margin-bottom:4px}
+.hour-bar{flex:1;border-radius:2px 2px 0 0;min-height:1px;transition:height .3s}
+.hour-labels{display:flex;gap:2px}
+.hour-lbl{flex:1;font-family:var(--fm);font-size:7px;color:var(--muted);text-align:center}
+
+/* OPERATORS TABLE */
+.op-table{background:var(--s2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:12px}
+.op-row{display:grid;grid-template-columns:1fr auto auto auto;gap:8px;padding:10px 12px;align-items:center;border-bottom:1px solid var(--border)}
+.op-row:last-child{border-bottom:none}
+.op-row.header{background:var(--s3)}
+.op-name{font-family:var(--ff);font-size:16px;color:var(--text)}
+.op-cnt{font-family:var(--fm);font-size:11px;color:var(--muted);text-align:center}
+.op-rev{font-family:var(--fm);font-size:13px;font-weight:700;color:var(--green);text-align:right}
+.op-avg{font-family:var(--fm);font-size:9px;color:var(--muted);text-align:right}
+.op-rank{font-family:var(--ff);font-size:18px;color:var(--muted)}
+.op-rank.r1{color:#FFD600} .op-rank.r2{color:#aaa} .op-rank.r3{color:#cd7f32}
+
+/* VEHICLES TABLE */
+.veh-table{background:var(--s2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:12px}
+.veh-row{display:grid;grid-template-columns:auto 1fr auto auto;gap:8px;padding:9px 12px;align-items:center;border-bottom:1px solid var(--border)}
+.veh-row:last-child{border-bottom:none}
+.veh-row.header{background:var(--s3)}
+.veh-name{font-family:var(--ff);font-size:15px}
+.veh-bar-wrap{height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.veh-bar{height:100%;border-radius:3px;background:var(--accent)}
+.veh-cnt{font-family:var(--fm);font-size:10px;color:var(--muted);text-align:right;white-space:nowrap}
+.veh-rev{font-family:var(--fm);font-size:11px;font-weight:700;color:var(--green);text-align:right;white-space:nowrap}
+
+/* PAY SPLIT */
+.pay-split{background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px}
+.pay-bar{height:20px;border-radius:6px;overflow:hidden;display:flex;margin-bottom:8px}
+.pay-seg{height:100%;display:flex;align-items:center;justify-content:center;font-family:var(--fm);font-size:8px;font-weight:700;color:#fff;transition:width .4s ease;white-space:nowrap;overflow:hidden}
+.pay-seg.qr{background:var(--purple)} .pay-seg.on{background:var(--blue)} .pay-seg.per{background:var(--orange)} .pay-seg.nal{background:var(--muted)}
+.pay-legend{display:flex;gap:10px;flex-wrap:wrap}
+.pay-item{display:flex;align-items:center;gap:5px;font-family:var(--fm);font-size:10px;color:var(--muted)}
+.pay-dot{width:8px;height:8px;border-radius:50%}
+
+/* DAYS TABLE */
+.days-table{background:var(--s2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:12px}
+.day-row{display:grid;grid-template-columns:60px 30px 1fr auto;gap:8px;padding:9px 12px;align-items:center;border-bottom:1px solid var(--border)}
+.day-row:last-child{border-bottom:none}
+.day-row.header{background:var(--s3);font-family:var(--fm);font-size:9px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+.day-date{font-family:var(--fm);font-size:11px;color:var(--text)}
+.day-name{font-family:var(--ff);font-size:14px;color:var(--muted)}
+.day-bar-wrap{height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+.day-bar{height:100%;border-radius:3px;background:var(--accent)}
+.day-rev{font-family:var(--fm);font-size:12px;font-weight:700;color:var(--green);text-align:right}
+.today-row{border-left:3px solid var(--accent)}
+
+/* WEEK COMPARE */
+.week-compare{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.wc-card{background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center}
+.wc-label{font-family:var(--fm);font-size:9px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}
+.wc-val{font-family:var(--ff);font-size:26px}
+.wc-diff{font-family:var(--fm);font-size:10px;margin-top:3px}
+.wc-diff.up{color:var(--green)} .wc-diff.down{color:var(--red)} .wc-diff.same{color:var(--muted)}
+
+.empty-state{text-align:center;padding:30px;color:var(--muted);font-family:var(--fm);font-size:11px;line-height:2}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="logo">⚡ ВРУМ</div>
+  <div class="hdr-right">
+    <div class="clock" id="clock"></div>
+    <button class="refresh-btn" onclick="loadData()">↻ Обновить</button>
+  </div>
+</div>
+
+<div class="period-tabs">
+  <div class="ptab on" onclick="setPeriod('today',this)">Сегодня</div>
+  <div class="ptab" onclick="setPeriod('week',this)">7 дней</div>
+  <div class="ptab" onclick="setPeriod('month',this)">30 дней</div>
+  <div class="ptab" onclick="setPeriod('all',this)">Всё время</div>
+</div>
+
+<div class="content" id="content">
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <div class="loading-text">Загружаем данные...</div>
+  </div>
+</div>
+
+<script>
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbziZkAHN0rrAKbDoBNjRgCVe7fj4zgiwiR5Cx3LAx7i5NGaOXFAXBuJRfTisw4r2X9q/exec';
+
+let allData = [];
+let period = 'today';
+
+// Clock
+setInterval(()=>{
+  const n=new Date();
+  document.getElementById('clock').innerHTML=
+    n.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'2-digit'})+
+    '<b>'+n.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit',second:'2-digit'})+'</b>';
+},1000);
+
+function setPeriod(p, el){
+  period = p;
+  document.querySelectorAll('.ptab').forEach(t=>t.classList.remove('on'));
+  el.classList.add('on');
+  render();
+}
+
+async function loadData(){
+  document.getElementById('content').innerHTML = `
+    <div class="loading">
+      <div class="spinner"></div>
+      <div class="loading-text">Загружаем данные...</div>
+    </div>`;
+  try{
+    const res = await fetch(SCRIPT_URL + '?action=getData', {method:'GET'});
+    const json = await res.json();
+    if(json && json.rows){
+      allData = json.rows;
+      render();
+    } else {
+      showError('Нет данных от сервера');
+    }
+  }catch(e){
+    showError('Ошибка подключения к таблице.<br>Проверь интернет и попробуй снова.');
+  }
+}
+
+function showError(msg){
+  document.getElementById('content').innerHTML = `
+    <div class="error-box">
+      <div class="error-text">⚠ ${msg}</div>
+    </div>
+    <div style="text-align:center;margin-top:16px">
+      <button onclick="loadData()" style="background:var(--accent);color:#000;border:none;padding:10px 24px;border-radius:20px;font-family:var(--fm);font-size:13px;font-weight:700;cursor:pointer">Попробовать снова</button>
+    </div>`;
+}
+
+// Парсим дату из разных форматов: DD.MM.YY, DD.MM.YYYY
+function parseDate(str){
+  if(!str) return null;
+  const s = String(str).trim();
+  const parts = s.split('.');
+  if(parts.length !== 3) return null;
+  const d = parseInt(parts[0]);
+  const m = parseInt(parts[1]) - 1;
+  const y = parts[2].length === 2 ? 2000 + parseInt(parts[2]) : parseInt(parts[2]);
+  const dt = new Date(y, m, d);
+  return isNaN(dt.getTime()) ? null : dt;
+}
+
+function todayDate(){ return new Date(new Date().setHours(0,0,0,0)); }
+
+function filterByPeriod(rows){
+  const today = todayDate();
+  return rows.filter(r => {
+    if(!r.date) return false;
+    const d = parseDate(r.date);
+    if(!d) return false;
+    if(period === 'today') return d.getTime() === today.getTime();
+    if(period === 'week'){
+      const w = new Date(today); w.setDate(w.getDate()-6);
+      return d >= w;
+    }
+    if(period === 'month'){
+      const m = new Date(today); m.setDate(m.getDate()-29);
+      return d >= m;
+    }
+    return true;
+  }).filter(r => !r.isReturn);
+}
+
+function render(){
+  const rows = filterByPeriod(allData);
+  const today = todayDate();
+  const todayStr = today.toLocaleDateString('ru-RU');
+
+  const total = rows.reduce((s,r)=>s+(+r.amount||0), 0);
+  const cnt = rows.length;
+  const avg = cnt > 0 ? Math.round(total/cnt) : 0;
+
+  // По точкам
+  const byPoint = {};
+  rows.forEach(r=>{
+    if(!byPoint[r.point]) byPoint[r.point]={cnt:0,rev:0};
+    byPoint[r.point].cnt++; byPoint[r.point].rev+=(+r.amount||0);
+  });
+
+  // По операторам
+  const byOp = {};
+  rows.forEach(r=>{
+    if(!r.operator) return;
+    if(!byOp[r.operator]) byOp[r.operator]={cnt:0,rev:0};
+    byOp[r.operator].cnt++; byOp[r.operator].rev+=(+r.amount||0);
+  });
+
+  // По машинкам
+  const byVeh = {};
+  rows.forEach(r=>{
+    if(!r.car) return;
+    if(!byVeh[r.car]) byVeh[r.car]={cnt:0,rev:0};
+    byVeh[r.car].cnt++; byVeh[r.car].rev+=(+r.amount||0);
+  });
+
+  // По оплате
+  const byPay = {QR:0, ОН:0, Пер:0, Нал:0};
+  rows.forEach(r=>{ if(byPay[r.pay]!==undefined) byPay[r.pay]+=(+r.amount||0); });
+
+  // По дням
+  const byDate = {};
+  rows.forEach(r=>{
+    if(!r.date) return;
+    if(!byDate[r.date]) byDate[r.date]={cnt:0,rev:0,day:r.day||''};
+    byDate[r.date].cnt++; byDate[r.date].rev+=(+r.amount||0);
+  });
+
+  // По часам
+  const byHour = {};
+  for(let h=10;h<=22;h++) byHour[h]=0;
+  rows.forEach(r=>{
+    if(!r.startTime) return;
+    const h = parseInt(r.startTime.split(':')[0]);
+    if(byHour[h]!==undefined) byHour[h]++;
+  });
+
+  // Сравнение недель
+  const thisWeekRows = allData.filter(r=>{
+    if(!r.date||r.isReturn) return false;
+    const d=parseDate(r.date); if(!d) return false;
+    const w=new Date(today); w.setDate(w.getDate()-6);
+    return d>=w;
+  });
+  const lastWeekRows = allData.filter(r=>{
+    if(!r.date||r.isReturn) return false;
+    const d=parseDate(r.date); if(!d) return false;
+    const w1=new Date(today); w1.setDate(w1.getDate()-13);
+    const w2=new Date(today); w2.setDate(w2.getDate()-7);
+    return d>=w1 && d<w2;
+  });
+  const thisWeekRev = thisWeekRows.reduce((s,r)=>s+(+r.amount||0),0);
+  const lastWeekRev = lastWeekRows.reduce((s,r)=>s+(+r.amount||0),0);
+  const weekDiff = lastWeekRev>0 ? Math.round((thisWeekRev-lastWeekRev)/lastWeekRev*100) : 0;
+
+  // HTML
+  let html = '';
+
+  // KPI
+  html += `<div class="kpi-grid">
+    <div class="kpi accent">
+      <div class="kpi-label">Выручка</div>
+      <div class="kpi-val">${fmtMoney(total)}</div>
+      <div class="kpi-sub">за выбранный период</div>
+    </div>
+    <div class="kpi kpi-green">
+      <div class="kpi-label">Прокатов</div>
+      <div class="kpi-val">${cnt}</div>
+      <div class="kpi-sub">средний чек ${avg}₽</div>
+    </div>
+    <div class="kpi kpi-blue">
+      <div class="kpi-label">Безнал</div>
+      <div class="kpi-val">${total>0?Math.round((total-(byPay['Нал']||0))/total*100):0}%</div>
+      <div class="kpi-sub">${fmtMoney(total-(byPay['Нал']||0))} ₽</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Наличные</div>
+      <div class="kpi-val" style="color:var(--red)">${fmtMoney(byPay['Нал']||0)}</div>
+      <div class="kpi-sub">${total>0?Math.round((byPay['Нал']||0)/total*100):0}% от выручки</div>
+    </div>
+  </div>`;
+
+  // По точкам
+  if(Object.keys(byPoint).length > 0){
+    html += `<div class="sec"><div class="sec-title">🏠 ПО ТОЧКАМ</div>
+    <div class="points-row">`;
+    Object.entries(byPoint).sort((a,b)=>b[1].rev-a[1].rev).forEach(([pt,d])=>{
+      const avg2 = d.cnt>0?Math.round(d.rev/d.cnt):0;
+      html+=`<div class="point-card">
+        <div class="point-name">${pt}</div>
+        <div class="point-rev">${fmtMoney(d.rev)}₽</div>
+        <div class="point-cnt">${d.cnt} прокатов</div>
+        <div class="point-avg">ср. чек ${avg2}₽</div>
+      </div>`;
+    });
+    html += `</div></div>`;
+  }
+
+  // Сравнение недель
+  if(period==='week'||period==='month'||period==='all'){
+    const diff = weekDiff;
+    const diffClass = diff>0?'up':diff<0?'down':'same';
+    const diffText = diff>0?'▲ +'+diff+'% к прошлой неделе':diff<0?'▼ '+diff+'% к прошлой неделе':'= без изменений';
+    html+=`<div class="sec"><div class="sec-title">📈 СРАВНЕНИЕ НЕДЕЛЬ</div>
+    <div class="week-compare">
+      <div class="wc-card">
+        <div class="wc-label">Эта неделя</div>
+        <div class="wc-val" style="color:var(--accent)">${fmtMoney(thisWeekRev)}₽</div>
+        <div class="wc-diff ${diffClass}">${diffText}</div>
+      </div>
+      <div class="wc-card">
+        <div class="wc-label">Прошлая неделя</div>
+        <div class="wc-val" style="color:var(--muted)">${fmtMoney(lastWeekRev)}₽</div>
+        <div class="wc-diff same">${lastWeekRows.length} прокатов</div>
+      </div>
+    </div></div>`;
+  }
+
+  // График по дням
+  const sortedDates = Object.keys(byDate).sort((a,b)=>{
+    const da=parseDate(a), db=parseDate(b);
+    return (da&&db)?da-db:0;
+  });
+  if(sortedDates.length > 0 && period!=='today'){
+    const maxRev = Math.max(...sortedDates.map(d=>byDate[d].rev));
+    html+=`<div class="sec"><div class="sec-title">📅 ВЫРУЧКА ПО ДНЯМ</div>
+    <div class="bar-chart">
+      <div class="bars">`;
+    sortedDates.slice(-14).forEach(date=>{
+      const d=byDate[date];
+      const h = maxRev>0?Math.round(d.rev/maxRev*90):2;
+      const isToday = date===todayStr;
+      html+=`<div class="bar-col">
+        <div class="bar-val">${d.rev>=1000?Math.round(d.rev/1000)+'к':d.rev}</div>
+        <div class="bar-fill ${isToday?'today':'normal'}" style="height:${h}px;background:${isToday?'var(--accent)':'#333'}"></div>
+        <div class="bar-label">${date.split('.')[0]+'.'+date.split('.')[1]}</div>
+      </div>`;
+    });
+    html+=`</div></div></div>`;
+  }
+
+  // По часам
+  const hourKeys = Object.keys(byHour).map(Number).sort((a,b)=>a-b);
+  const maxHour = Math.max(...hourKeys.map(h=>byHour[h]),1);
+  html+=`<div class="sec"><div class="sec-title">⏰ ПИКИ ПО ЧАСАМ <span>кол-во прокатов</span></div>
+  <div class="hour-chart">
+    <div class="hour-bars">`;
+  hourKeys.forEach(h=>{
+    const hh=Math.round(byHour[h]/maxHour*55)+2;
+    const intensity = byHour[h]/maxHour;
+    const r=Math.round(255*intensity), g=Math.round(214*intensity);
+    html+=`<div class="hour-bar" style="height:${hh}px;background:rgb(${r},${g},0)" title="${h}:00 — ${byHour[h]} прокатов"></div>`;
+  });
+  html+=`</div><div class="hour-labels">`;
+  hourKeys.forEach(h=>{ html+=`<div class="hour-lbl">${h}</div>`; });
+  html+=`</div></div></div>`;
+
+  // Операторы
+  const sortedOps = Object.entries(byOp).sort((a,b)=>b[1].rev-a[1].rev);
+  if(sortedOps.length>0){
+    html+=`<div class="sec"><div class="sec-title">👤 ОПЕРАТОРЫ</div>
+    <div class="op-table">
+      <div class="op-row header">
+        <div style="font-family:var(--fm);font-size:9px">#</div>
+        <div style="font-family:var(--fm);font-size:9px">Имя</div>
+        <div style="font-family:var(--fm);font-size:9px;text-align:center">Прок.</div>
+        <div style="font-family:var(--fm);font-size:9px;text-align:right">Выручка</div>
+      </div>`;
+    sortedOps.forEach(([op,d],i)=>{
+      const rankClass = i===0?'r1':i===1?'r2':i===2?'r3':'';
+      const rankEmoji = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}`;
+      const avg3 = d.cnt>0?Math.round(d.rev/d.cnt):0;
+      html+=`<div class="op-row">
+        <div class="op-rank ${rankClass}">${rankEmoji}</div>
+        <div><div class="op-name">${op}</div><div class="op-avg">ср. ${avg3}₽/прокат</div></div>
+        <div class="op-cnt">${d.cnt}</div>
+        <div class="op-rev">${fmtMoney(d.rev)}₽</div>
+      </div>`;
+    });
+    html+=`</div></div>`;
+  }
+
+  // Машинки
+  const sortedVeh = Object.entries(byVeh).sort((a,b)=>b[1].cnt-a[1].cnt);
+  const maxVeh = sortedVeh.length>0?sortedVeh[0][1].cnt:1;
+  if(sortedVeh.length>0){
+    html+=`<div class="sec"><div class="sec-title">🏎️ РЕЙТИНГ МАШИНОК</div>
+    <div class="veh-table">
+      <div class="veh-row header">
+        <div></div>
+        <div style="font-family:var(--fm);font-size:9px">Машинка</div>
+        <div style="font-family:var(--fm);font-size:9px;text-align:right">Прок.</div>
+        <div style="font-family:var(--fm);font-size:9px;text-align:right">Выручка</div>
+      </div>`;
+    sortedVeh.slice(0,20).forEach(([veh,d],i)=>{
+      const barW = Math.round(d.cnt/maxVeh*100);
+      html+=`<div class="veh-row">
+        <div style="font-family:var(--fm);font-size:10px;color:var(--muted)">${i+1}</div>
+        <div>
+          <div class="veh-name">${veh}</div>
+          <div class="veh-bar-wrap"><div class="veh-bar" style="width:${barW}%"></div></div>
+        </div>
+        <div class="veh-cnt">${d.cnt}×</div>
+        <div class="veh-rev">${fmtMoney(d.rev)}₽</div>
+      </div>`;
+    });
+    html+=`</div></div>`;
+  }
+
+  // Способы оплаты
+  const payTotal = Object.values(byPay).reduce((s,v)=>s+v,0);
+  if(payTotal>0){
+    html+=`<div class="sec"><div class="sec-title">💳 СПОСОБЫ ОПЛАТЫ</div>
+    <div class="pay-split">
+      <div class="pay-bar">`;
+    const payColors = {QR:'qr', ОН:'on', Пер:'per', Нал:'nal'};
+    Object.entries(byPay).forEach(([pay,rev])=>{
+      if(rev<=0) return;
+      const pct=Math.round(rev/payTotal*100);
+      html+=`<div class="pay-seg ${payColors[pay]||''}" style="width:${pct}%">${pct>8?pct+'%':''}</div>`;
+    });
+    html+=`</div><div class="pay-legend">`;
+    const payDotColors = {QR:'#D500F9', ОН:'#2979FF', Пер:'#FF6D00', Нал:'#555'};
+    Object.entries(byPay).forEach(([pay,rev])=>{
+      if(rev<=0) return;
+      const pct=Math.round(rev/payTotal*100);
+      html+=`<div class="pay-item"><div class="pay-dot" style="background:${payDotColors[pay]||'#888'}"></div>${pay}: ${fmtMoney(rev)}₽ (${pct}%)</div>`;
+    });
+    html+=`</div></div></div>`;
+  }
+
+  // Таблица по дням
+  if(sortedDates.length>0){
+    const maxRevDay = Math.max(...sortedDates.map(d=>byDate[d].rev));
+    html+=`<div class="sec"><div class="sec-title">📋 ПОДРОБНО ПО ДНЯМ</div>
+    <div class="days-table">
+      <div class="day-row header">
+        <div>Дата</div><div>День</div><div>Выручка</div><div>₽</div>
+      </div>`;
+    [...sortedDates].reverse().forEach(date=>{
+      const d=byDate[date];
+      const barW=maxRevDay>0?Math.round(d.rev/maxRevDay*100):0;
+      const isToday=date===todayStr;
+      html+=`<div class="day-row ${isToday?'today-row':''}">
+        <div class="day-date">${date}</div>
+        <div class="day-name">${d.day}</div>
+        <div><div class="day-bar-wrap"><div class="day-bar" style="width:${barW}%;background:${isToday?'var(--accent)':'#444'}"></div></div><div style="font-family:var(--fm);font-size:8px;color:var(--muted);margin-top:2px">${d.cnt} прок.</div></div>
+        <div class="day-rev">${fmtMoney(d.rev)}₽</div>
+      </div>`;
+    });
+    html+=`</div></div>`;
+  }
+
+  if(!html) html = '<div class="empty-state">Нет данных за выбранный период</div>';
+
+  document.getElementById('content').innerHTML = html;
+}
+
+function fmtMoney(n){
+  n=+n||0;
+  if(n>=1000000) return (n/1000000).toFixed(1)+'М';
+  if(n>=1000) return (n/1000).toFixed(0)+'к';
+  return String(n);
+}
+
+loadData();
+</script>
+</body>
+</html>
