@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ВРУМ — Скрипты оператора</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;600&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#080808;--s1:#111;--s2:#181818;--s3:#222;--border:#2a2a2a;
+  --accent:#FFD600;--green:#00E676;--red:#FF1744;--blue:#2979FF;
+  --orange:#FF6D00;--purple:#D500F9;--text:#F0F0F0;--muted:#555;
+  --ff:'Bebas Neue',sans-serif;--fm:'JetBrains Mono',monospace;--fb:'Manrope',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--text);font-family:var(--fb);min-height:100vh;padding-bottom:60px}
+
+.hdr{background:var(--s1);border-bottom:2px solid var(--accent);padding:12px 16px;position:sticky;top:0;z-index:50}
+.logo{font-family:var(--ff);font-size:22px;letter-spacing:3px;color:var(--accent)}
+.sub{font-family:var(--fm);font-size:9px;color:var(--muted);letter-spacing:2px;margin-top:2px}
+
+/* TABS */
+.tabs{display:flex;background:var(--s1);border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0}
+.tab{flex-shrink:0;padding:10px 14px;font-family:var(--ff);font-size:13px;letter-spacing:1px;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}
+.tab.on{color:var(--accent);border-color:var(--accent)}
+
+.page{display:none;padding:12px}
+.page.on{display:block}
+
+/* SECTION */
+.sec{margin-bottom:16px}
+.sec-title{font-family:var(--ff);font-size:18px;letter-spacing:2px;color:var(--accent);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+
+/* КЛИЕНТ КАРТОЧКА */
+.client-card{background:var(--s2);border:2px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:10px}
+.cc-header{padding:10px 14px;display:flex;align-items:center;gap:10px}
+.cc-icon{font-size:28px}
+.cc-title{font-family:var(--ff);font-size:20px;letter-spacing:1px}
+.cc-sub{font-family:var(--fm);font-size:9px;color:var(--muted);margin-top:2px}
+.cc-body{padding:0 14px 12px}
+
+/* СКРИПТ БЛОК */
+.script-block{background:var(--s3);border-radius:10px;padding:12px;margin-bottom:8px;border-left:3px solid var(--border)}
+.script-block.green{border-left-color:var(--green)}
+.script-block.yellow{border-left-color:var(--accent)}
+.script-block.blue{border-left-color:var(--blue)}
+.script-block.orange{border-left-color:var(--orange)}
+.script-block.red{border-left-color:var(--red)}
+.script-block.purple{border-left-color:var(--purple)}
+
+.sb-label{font-family:var(--fm);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.sb-label.green{color:var(--green)} .sb-label.yellow{color:var(--accent)}
+.sb-label.blue{color:var(--blue)} .sb-label.orange{color:var(--orange)}
+.sb-label.red{color:var(--red)} .sb-label.purple{color:var(--purple)}
+
+.sb-text{font-size:14px;line-height:1.7;color:var(--text)}
+.sb-text em{color:var(--accent);font-style:normal;font-weight:700}
+.sb-note{font-family:var(--fm);font-size:10px;color:var(--muted);margin-top:6px;line-height:1.6;font-style:italic}
+
+/* ПРАВИЛА */
+.rules{background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px}
+.rule-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);align-items:flex-start}
+.rule-item:last-child{border-bottom:none}
+.rule-ico{font-size:20px;flex-shrink:0;width:28px;text-align:center}
+.rule-text{font-size:13px;line-height:1.5;color:var(--text)}
+.rule-text b{color:var(--accent)}
+
+/* ЗАПРЕЩЕНО */
+.dont{background:#1a0505;border:1px solid var(--red);border-radius:10px;padding:12px;margin-bottom:8px}
+.dont-title{font-family:var(--ff);font-size:14px;color:var(--red);letter-spacing:1px;margin-bottom:6px}
+.dont-item{font-family:var(--fm);font-size:10px;color:#ff6666;line-height:2;display:flex;gap:6px}
+
+/* ПРОДАЖИ */
+.upsell{background:var(--s2);border:2px solid var(--accent);border-radius:14px;overflow:hidden;margin-bottom:10px}
+.upsell-header{background:var(--accent);padding:8px 14px;font-family:var(--ff);font-size:16px;letter-spacing:1px;color:#000}
+.upsell-body{padding:12px}
+.upsell-case{background:var(--s3);border-radius:8px;padding:10px;margin-bottom:8px}
+.uc-when{font-family:var(--fm);font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:5px}
+.uc-say{font-size:13px;line-height:1.7;color:var(--text)}
+.uc-say em{color:var(--green);font-style:normal;font-weight:700}
+.uc-result{font-family:var(--fm);font-size:9px;color:var(--green);margin-top:5px}
+
+/* СИТУАЦИИ */
+.situation{background:var(--s2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:8px}
+.sit-q{background:var(--s3);padding:10px 14px;font-size:13px;font-weight:700;color:var(--text);display:flex;gap:8px;align-items:flex-start}
+.sit-q::before{content:'❓';flex-shrink:0}
+.sit-a{padding:10px 14px;font-size:13px;line-height:1.7;color:var(--text);border-left:3px solid var(--green)}
+.sit-a em{color:var(--green);font-style:normal;font-weight:700}
+
+/* ПАМЯТКА */
+.memo{background:var(--accent);border-radius:12px;padding:14px;margin-bottom:10px}
+.memo-title{font-family:var(--ff);font-size:18px;letter-spacing:1px;color:#000;margin-bottom:8px}
+.memo-item{display:flex;gap:8px;margin-bottom:6px;align-items:flex-start}
+.memo-num{font-family:var(--ff);font-size:18px;color:#000;flex-shrink:0;width:24px}
+.memo-text{font-size:12px;color:#000;line-height:1.5;font-weight:600}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="logo">⚡ ВРУМ — Скрипты</div>
+  <div class="sub">Руководство оператора · Конфиденциально</div>
+</div>
+
+<div class="tabs">
+  <div class="tab on" onclick="goTab('meet',this)">👋 Встреча</div>
+  <div class="tab" onclick="goTab('kids',this)">🧒 С детьми</div>
+  <div class="tab" onclick="goTab('parents',this)">👨‍👩‍👧 С родит.</div>
+  <div class="tab" onclick="goTab('sales',this)">💰 Продажи</div>
+  <div class="tab" onclick="goTab('cases',this)">🔧 Ситуации</div>
+  <div class="tab" onclick="goTab('rules',this)">📋 Правила</div>
+</div>
+
+<!-- ═══════════════ ВСТРЕЧА ═══════════════ -->
+<div class="page on" id="page-meet">
+
+  <div class="sec">
+    <div class="sec-title">👋 ПЕРВЫЙ КОНТАКТ</div>
+
+    <div class="script-block green">
+      <div class="sb-label green">Когда подходят — говори сразу</div>
+      <div class="sb-text">«Привет! Добро пожаловать в <em>ВРУМ</em> — выбирайте любую машинку, <em>15 минут</em> за <em>500₽</em>. Оплата картой или QR.»</div>
+      <div class="sb-note">Называй цену сразу — это снимает главный вопрос и показывает уверенность</div>
+    </div>
+
+    <div class="script-block green" style="border-left-color:#00E676">
+      <div class="sb-label green">После оплаты — ВСЕГДА говори время окончания</div>
+      <div class="sb-text">«Отлично! Ваше время до <em>[называй время]</em> — следите пожалуйста, я скажу когда будет 2 минуты.»</div>
+      <div class="sb-note">⚡ Время окончания видно прямо в приложении на кнопке машинки — например «до 15:30». Называй это время родителю сразу после запуска. Родитель сам следит → ребёнок возвращается вовремя → ты не бегаешь за ними.</div>
+    </div>
+
+    <div class="script-block yellow">
+      <div class="sb-label yellow">Если смотрят но не подходят</div>
+      <div class="sb-text">«Хотите попробуете? Первый круг покажу как управлять — это очень просто!»</div>
+      <div class="sb-note">Не давить. Сказал один раз, дал человеку подумать</div>
+    </div>
+
+    <div class="script-block blue">
+      <div class="sb-label blue">Определи кто главный — ребёнок или родитель</div>
+      <div class="sb-text">Смотри кто смотрит на машинки с интересом.<br><br>
+      Если <em>ребёнок тянет за руку</em> — говори с ребёнком, родитель уже согласен.<br><br>
+      Если <em>родитель изучает</em> — говори с родителем, давай факты: безопасно, 15 минут, фиксированная цена.</div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">🔁 ПОСТОЯННЫЙ КЛИЕНТ</div>
+    <div class="script-block purple">
+      <div class="sb-label purple">Узнал знакомое лицо</div>
+      <div class="sb-text">«О, снова вы! Рады видеть. Та же машинка или попробуем что-то новое сегодня?»</div>
+      <div class="sb-note">Люди любят когда их помнят. Даже если не помнишь — делай вид что помнишь. Это работает</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════ С ДЕТЬМИ ═══════════════ -->
+<div class="page" id="page-kids">
+
+  <div class="sec">
+    <div class="sec-title">👶 МАЛЫШИ ДО 5 ЛЕТ</div>
+    <div class="client-card">
+      <div class="cc-header">
+        <div class="cc-icon">👶</div>
+        <div>
+          <div class="cc-title">Малыши · до 5 лет</div>
+          <div class="cc-sub">Говори с родителями · ребёнка хвали · всё просто</div>
+        </div>
+      </div>
+      <div class="cc-body">
+        <div class="script-block green">
+          <div class="sb-label green">Посадка в машинку</div>
+          <div class="sb-text">«Смотри какой крутой гонщик! Садись, я покажу как ехать. Вот педаль — нажимаешь и едешь, отпускаешь — останавливаешься. Всё просто!»</div>
+        </div>
+        <div class="script-block yellow">
+          <div class="sb-label yellow">Сразу говори время родителю</div>
+          <div class="sb-text">«Ваше время до <em>[время из приложения]</em> — следите пожалуйста, подойдите заранее.»</div>
+          <div class="sb-note">Посмотри на кнопку машинки в приложении — там написано например «до 15:30». Скажи это родителю сразу. Они сами придут вовремя — тебе не надо бегать и искать их по площадке.</div>
+        </div>
+        <div class="script-block yellow">
+          <div class="sb-label yellow">Если боится</div>
+          <div class="sb-text">«Не страшно, я рядом буду. Попробуй чуть-чуть — вот так, молодец! Видишь, ты уже едешь!»</div>
+          <div class="sb-note">Не торопи. Дай 30 секунд освоиться — потом поедет сам</div>
+        </div>
+        <div class="script-block blue">
+          <div class="sb-label blue">Во время катания</div>
+          <div class="sb-text">«О, смотри как быстро! Настоящий гонщик!»</div>
+          <div class="sb-note">Мини-похвала раз в 2-3 минуты — ребёнок счастлив, родитель видит что его замечают</div>
+        </div>
+        <div class="script-block orange">
+          <div class="sb-label orange">Конец проката</div>
+          <div class="sb-text">«Всё, время вышло. Ты сегодня отлично катался! Будем ждать тебя снова, гонщик!»</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">🧒 ДЕТИ 5-10 ЛЕТ</div>
+    <div class="client-card">
+      <div class="cc-header">
+        <div class="cc-icon">🧒</div>
+        <div>
+          <div class="cc-title">Дети · 5-10 лет</div>
+          <div class="cc-sub">Главная аудитория · говори как с равным · не сюсюкай</div>
+        </div>
+      </div>
+      <div class="cc-body">
+        <div class="script-block green">
+          <div class="sb-label green">При выборе машинки</div>
+          <div class="sb-text">«Какую берёшь? Дрифт самый быстрый — он заносится в поворотах. Или классическую? Обе крутые.»</div>
+          <div class="sb-note">Дай выбор — ребёнок чувствует себя взрослым когда сам решает</div>
+        </div>
+        <div class="script-block yellow">
+          <div class="sb-label yellow">Инструктаж</div>
+          <div class="sb-text">«Значит так: педаль газа — едешь, руль — поворачиваешь. Дрифт умеет заносить — попробуй в повороте держать газ. Понял? Поехали!»</div>
+        </div>
+        <div class="script-block blue">
+          <div class="sb-label blue">Завязать разговор во время катания</div>
+          <div class="sb-text">«В игры на телефоне играешь? В гонки? Тут похоже, только настоящее!»</div>
+          <div class="sb-text" style="margin-top:6px">«Первый раз у нас? Как тебе? Быстро едет?»</div>
+        </div>
+        <div class="script-block orange">
+          <div class="sb-label orange">Перед окончанием</div>
+          <div class="sb-text">«Ещё 2 минуты осталось — хочешь последний круг побыстрее?»</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">🧑 ДЕТИ 10-14 ЛЕТ</div>
+    <div class="client-card">
+      <div class="cc-header">
+        <div class="cc-icon">🧑</div>
+        <div>
+          <div class="cc-title">Подростки · 10-14 лет</div>
+          <div class="cc-sub">Говори как со взрослым · не опекай · уважай</div>
+        </div>
+      </div>
+      <div class="cc-body">
+        <div class="script-block green">
+          <div class="sb-label green">При выборе</div>
+          <div class="sb-text">«Дрифт или машинка? Дрифт мощнее — развернёшь в повороте если умеешь. Пробовал уже?»</div>
+        </div>
+        <div class="script-block yellow">
+          <div class="sb-label yellow">Если уже катался раньше</div>
+          <div class="sb-text">«О, значит уже знаешь что к чему. Попробуй сегодня <em>дрифт</em> — там управление другое, интереснее.»</div>
+        </div>
+        <div class="script-block blue">
+          <div class="sb-label blue">Не говори лишнего</div>
+          <div class="sb-text">Подростки не любят когда их учат. Дал машинку — отошёл. Наблюдай издали. Если что-то пошло не так — подойди спокойно, без паники.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════ С РОДИТЕЛЯМИ ═══════════════ -->
+<div class="page" id="page-parents">
+
+  <div class="sec">
+    <div class="sec-title">👨‍👩‍👧 РОДИТЕЛЬ СТОИТ РЯДОМ</div>
+
+    <div class="script-block green">
+      <div class="sb-label green">Пока ребёнок катается — заговори</div>
+      <div class="sb-text">«Хорошо катается! Первый раз у вас?»</div>
+      <div class="sb-note">Простой вопрос открывает разговор. Дальше слушай — родитель сам расскажет</div>
+    </div>
+
+    <div class="script-block yellow">
+      <div class="sb-label yellow">Если родитель фотографирует</div>
+      <div class="sb-text">«Хотите я сфотографирую вас вместе когда закончит? Встаньте вот здесь — на фоне машинки хорошо получится.»</div>
+      <div class="sb-note">Родитель будет благодарен. Фото уйдёт в соцсети — это бесплатная реклама для ВРУМ</div>
+    </div>
+
+    <div class="script-block blue">
+      <div class="sb-label blue">Родитель выглядит торопливым</div>
+      <div class="sb-text">«Всё идёт по таймеру — ровно 15 минут, я скажу когда заканчивается. Можете отдохнуть пока.»</div>
+      <div class="sb-note">Снимаешь тревогу — родитель расслабляется и остаётся дольше</div>
+    </div>
+
+    <div class="script-block orange">
+      <div class="sb-label orange">Родитель беспокоится о безопасности</div>
+      <div class="sb-text">«Скорость небольшая, специально ограничена. Я всегда рядом слежу. Площадка ровная, всё безопасно.»</div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">👤 РОДИТЕЛЬ ОТОШЁЛ</div>
+    <div class="script-block purple">
+      <div class="sb-label purple">Родитель ушёл — ребёнок один</div>
+      <div class="sb-text">Следи за ребёнком внимательнее. Если ребёнок маленький и явно растерян — спроси спокойно: «Где мама или папа? Они рядом?»</div>
+      <div class="sb-note">Не пугай ребёнка. Просто убедись что всё в порядке</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════ ПРОДАЖИ ═══════════════ -->
+<div class="page" id="page-sales">
+
+  <div class="sec">
+    <div class="sec-title">💰 КАК ПРЕДЛАГАТЬ</div>
+
+    <div class="rules" style="margin-bottom:12px">
+      <div class="rule-item">
+        <div class="rule-ico">✅</div>
+        <div class="rule-text"><b>Одно предложение — один раз.</b> Предложил, получил ответ. Не повторяй дважды.</div>
+      </div>
+      <div class="rule-item">
+        <div class="rule-ico">✅</div>
+        <div class="rule-text"><b>Предлагай в нужный момент.</b> Не в самом начале и не когда уже уходят.</div>
+      </div>
+      <div class="rule-item">
+        <div class="rule-ico">✅</div>
+        <div class="rule-text"><b>Говори про выгоду для ребёнка</b>, а не про деньги.</div>
+      </div>
+      <div class="rule-item">
+        <div class="rule-ico">❌</div>
+        <div class="rule-text"><b>Не упрашивай.</b> Сказали нет — улыбнулся, отошёл.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">🔄 ЕЩЁ ОДИН КРУГ</div>
+    <div class="upsell">
+      <div class="upsell-header">Допродажа: ещё один прокат</div>
+      <div class="upsell-body">
+        <div class="upsell-case">
+          <div class="uc-when">За 2 минуты до конца</div>
+          <div class="uc-say">«Время заканчивается. <em>Хочешь ещё круг?</em> Это ещё 15 минут — всё то же самое.»</div>
+          <div class="uc-result">→ говоришь ребёнку, он сам просит родителя</div>
+        </div>
+        <div class="upsell-case">
+          <div class="uc-when">Когда ребёнок явно не хочет уходить</div>
+          <div class="uc-say">«Не хочешь заканчивать? Скажи маме или папе — можно взять ещё один заезд.»</div>
+          <div class="uc-result">→ ребёнок сам продаёт родителю</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">🤸 ПРЕДЛОЖИ БАТУТ</div>
+    <div class="upsell">
+      <div class="upsell-header">Кросс-продажа: батут после машинки</div>
+      <div class="upsell-body">
+        <div class="upsell-case">
+          <div class="uc-when">Когда прокат закончился и ребёнок доволен</div>
+          <div class="uc-say">«Кстати, у нас ещё батут — <em>20 минут за 400₽</em>. Там сейчас свободно, можно прямо сейчас.»</div>
+          <div class="uc-result">→ говоришь родителю, указываешь рукой на батут</div>
+        </div>
+        <div class="upsell-case">
+          <div class="uc-when">Если ребёнок сам смотрит на батут</div>
+          <div class="uc-say">«Хочешь на батут? Там тоже классно — прыгаешь сколько хочешь <em>20 минут</em>.»</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">🎯 ПРЕДЛОЖИ ШАРИК</div>
+    <div class="upsell">
+      <div class="upsell-header">Лопни шарик · 300₽ · быстрая продажа</div>
+      <div class="upsell-body">
+        <div class="upsell-case">
+          <div class="uc-when">Пока ребёнок катается — родителю</div>
+          <div class="uc-say">«Пока ждёте — у нас ещё аттракцион "Лопни шарик", <em>300₽</em>. Дети обожают — выигрывают приз.»</div>
+        </div>
+        <div class="upsell-case">
+          <div class="uc-when">После окончания проката — ребёнку</div>
+          <div class="uc-say">«Хочешь выиграть приз? Вон там шарики — стреляешь и получаешь подарок!»</div>
+          <div class="uc-result">→ работает почти всегда с детьми до 10 лет</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">🔁 ПРИХОДИТЕ СНОВА</div>
+    <div class="script-block green">
+      <div class="sb-label green">При уходе — всегда говори это</div>
+      <div class="sb-text">«Спасибо что были у нас! Ждём вас снова — в выходные у нас обычно весело, много детей.»</div>
+      <div class="sb-note">Простое приглашение увеличивает возврат. Говори каждому уходящему клиенту</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════ СИТУАЦИИ ═══════════════ -->
+<div class="page" id="page-cases">
+
+  <div class="sec">
+    <div class="sec-title">🔧 СЛОЖНЫЕ СИТУАЦИИ</div>
+
+    <div class="situation">
+      <div class="sit-q">Ребёнок плачет и не хочет слезать с машинки</div>
+      <div class="sit-a">Не торопи и не дави. Скажи спокойно: «Машинка устала, ей нужно отдохнуть. Но ты можешь прийти завтра снова!» Если не помогает — зови родителя взглядом.</div>
+    </div>
+
+    <div class="situation">
+      <div class="sit-q">Родитель недоволен что время закончилось</div>
+      <div class="sit-a"><em>«Всё верно — ровно 15 минут как и договаривались. Если хотите продолжить — можем сразу оплатить ещё один заезд.»</em> Не извиняйся за правила — они для всех одинаковые.</div>
+    </div>
+
+    <div class="situation">
+      <div class="sit-q">Машинка сломалась во время проката</div>
+      <div class="sit-a">«Приношу извинения, машинка подвела. Сейчас пересадим на другую — время засчитаем с начала.» Не объясняй долго, сразу предложи решение.</div>
+    </div>
+
+    <div class="situation">
+      <div class="sit-q">Клиент просит скидку</div>
+      <div class="sit-a">«У нас фиксированные цены для всех — <em>500₽</em> за 15 минут. Зато качество стабильное и машинки всегда заряжены.» Не извиняйся и не торгуйся.</div>
+    </div>
+
+    <div class="situation">
+      <div class="sit-q">Дети дерутся или спорят из-за машинки</div>
+      <div class="sit-a">Подойди спокойно: «Ребята, всем хватит машинок — вот эта свободна прямо сейчас.» Переключи внимание на решение, а не на конфликт.</div>
+    </div>
+
+    <div class="situation">
+      <div class="sit-q">Родитель хочет сам сесть в машинку</div>
+      <div class="sit-a">«Машинки рассчитаны на детей до 50 кг — к сожалению, для взрослых не подойдёт. Но можно снять на видео как ребёнок едет — встаньте вот здесь, хороший ракурс!»</div>
+    </div>
+
+    <div class="situation">
+      <div class="sit-q">Клиент спрашивает про скоро открытие / закрытие</div>
+      <div class="sit-a">«Работаем с 10 утра, закрываемся когда погода позволяет — обычно до 21-22 часов.»</div>
+    </div>
+
+    <div class="situation">
+      <div class="sit-q">Агрессивный или грубый клиент</div>
+      <div class="sit-a">Говори тихо и спокойно — это сбивает агрессию. «Понимаю вас. Давайте разберёмся — что именно случилось?» Не повышай голос в ответ. Если совсем плохо — звони владельцу.</div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- ═══════════════ ПРАВИЛА ═══════════════ -->
+<div class="page" id="page-rules">
+
+  <div class="memo">
+    <div class="memo-title">⚡ ПАМЯТКА ОПЕРАТОРА</div>
+    <div class="memo-item"><div class="memo-num">1</div><div class="memo-text">Улыбайся при встрече — всегда, даже в плохой день</div></div>
+    <div class="memo-item"><div class="memo-num">2</div><div class="memo-text">Называй время и цену сразу — не жди пока спросят</div></div>
+    <div class="memo-item"><div class="memo-num">3</div><div class="memo-text" style="color:#FFD600"><strong>После запуска СРАЗУ говори родителю: «Ваше время до [время]» — смотришь в приложение на кнопку машинки</strong></div></div>
+    <div class="memo-item"><div class="memo-num">4</div><div class="memo-text">С ребёнком говори с ребёнком, с родителем — с родителем</div></div>
+    <div class="memo-item"><div class="memo-num">5</div><div class="memo-text">Хвали ребёнка во время катания — раз в 2-3 минуты</div></div>
+    <div class="memo-item"><div class="memo-num">6</div><div class="memo-text">Предложи батут или шарик — один раз, без давления</div></div>
+    <div class="memo-item"><div class="memo-num">7</div><div class="memo-text">Каждому уходящему: «Ждём вас снова!»</div></div>
+    <div class="memo-item"><div class="memo-num">8</div><div class="memo-text">Все платежи только через терминал или QR — наличные не принимаем</div></div>
+    <div class="memo-item"><div class="memo-num">9</div><div class="memo-text">Каждый прокат фиксируй в приложении сразу</div></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">❌ НИКОГДА НЕ ДЕЛАЙ</div>
+    <div class="dont">
+      <div class="dont-title">Запрещено</div>
+      <div class="dont-item"><span>🚫</span>Не принимай наличные мимо кассы</div>
+      <div class="dont-item"><span>🚫</span>Не сиди в телефоне когда есть клиенты</div>
+      <div class="dont-item"><span>🚫</span>Не говори «не знаю» — говори «сейчас уточню»</div>
+      <div class="dont-item"><span>🚫</span>Не спорь с клиентом публично</div>
+      <div class="dont-item"><span>🚫</span>Не уходи с точки без замены</div>
+      <div class="dont-item"><span>🚫</span>Не игнорируй разряженные машинки</div>
+      <div class="dont-item"><span>🚫</span>Не обещай скидки без разрешения владельца</div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">✅ ВСЕГДА ДЕЛАЙ</div>
+    <div class="rules">
+      <div class="rule-item">
+        <div class="rule-ico">💚</div>
+        <div class="rule-text"><b>Встречай стоя</b> — не сиди когда подходит клиент</div>
+      </div>
+      <div class="rule-item">
+        <div class="rule-ico">📱</div>
+        <div class="rule-text"><b>Фиксируй прокат в приложении</b> сразу после оплаты</div>
+      </div>
+      <div class="rule-item">
+        <div class="rule-ico">🔋</div>
+        <div class="rule-text"><b>Следи за зарядом</b> — разряженная машинка сразу на зарядку</div>
+      </div>
+      <div class="rule-item">
+        <div class="rule-ico">📸</div>
+        <div class="rule-text"><b>Предложи сфотографировать</b> ребёнка для родителей</div>
+      </div>
+      <div class="rule-item">
+        <div class="rule-ico">🧹</div>
+        <div class="rule-text"><b>Протирай машинки</b> после каждой смены</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function goTab(name, el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  el.classList.add('on');
+  document.getElementById('page-'+name).classList.add('on');
+  window.scrollTo(0,0);
+}
+</script>
+</body>
+</html>
