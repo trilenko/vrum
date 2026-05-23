@@ -517,19 +517,21 @@ function buildGrids(){
   const drifts=veh.drifts, cars=veh.cars, bc=veh.bats;
   const col=n=>n<=8?'g4':n<=15?'g5':'g6';
 
+  const ptPrefix=pt==='Цесаревича'?'ц':'т';
+
   // Дрифты — скрываем на Татарке
   document.getElementById('drift-sec').style.display=cfg.hasDrift&&drifts.length?'':'none';
 
   const dg=document.getElementById('d-grid');
   dg.className='vgrid '+col(drifts.length);dg.innerHTML='';
-  if(cfg.hasDrift) drifts.forEach(num=>dg.appendChild(mkVC('d'+num,'🏎️',num,'drift')));
+  if(cfg.hasDrift) drifts.forEach(num=>dg.appendChild(mkVC(ptPrefix+'d'+num,'🏎️',num,'drift')));
 
   const cg=document.getElementById('c-grid');
   cg.className='vgrid '+col(cars.length);cg.innerHTML='';
-  cars.forEach(num=>cg.appendChild(mkVC('c'+num,'🚗',num,'car')));
+  cars.forEach(num=>cg.appendChild(mkVC(ptPrefix+'c'+num,'🚗',num,'car')));
 
   const bg=document.getElementById('b-grid');bg.innerHTML='';
-  for(let i=1;i<=bc;i++)bg.appendChild(mkBC('b'+i,i));
+  for(let i=1;i<=bc;i++)bg.appendChild(mkBC(ptPrefix+'b'+i,i));
   updFree();
 }
 
@@ -588,8 +590,9 @@ function updFree(){
   const pt=getCurPt();
   const cfg=PT_CFG[pt]||PT_CFG['Цесаревича'];
   const veh=VEHICLES[pt]||VEHICLES['Цесаревича'];
-  const dFree=veh.drifts.filter(n=>!active['d'+n]).length;
-  const cFree=veh.cars.filter(n=>!active['c'+n]).length;
+  const pfx=pt==='Цесаревича'?'ц':'т';
+  const dFree=veh.drifts.filter(n=>!active[pfx+'d'+n]).length;
+  const cFree=veh.cars.filter(n=>!active[pfx+'c'+n]).length;
   if(cfg.hasDrift&&veh.drifts.length) document.getElementById('d-info').textContent=`${dFree} своб · 500₽ · 15мин`;
   document.getElementById('c-info').textContent=`${cFree} своб · 500₽ · 15мин`;
 }
