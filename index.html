@@ -627,11 +627,11 @@ function bcTap(id,num){
   pid=id;
   if(active[id]){
     const a=active[id],el=Math.floor((Date.now()-a.ms)/1000);
-    document.getElementById('stop-title').textContent=`🤸 Батут №${num} — СТОП?`;
+    document.getElementById('stop-title').textContent=`🤸 Батут — СТОП?`;
     document.getElementById('stop-sub').textContent=`${fmt(el)} в прокате · ${a.pay} · 400₽`;
     openM('m-stop');
   } else {
-    document.getElementById('pay-title').textContent=`🤸 Батут №${num}`;
+    document.getElementById('pay-title').textContent=`🤸 Батут`;
     document.getElementById('pay-sub').textContent=`400₽ · 20 минут`;
     openM('m-pay');
   }
@@ -681,11 +681,15 @@ function doRet(){
 }
 
 function mkEntry(id,a,mins,sd,isRet,reason){
-  const tname=a.tp==='drift'?'Дрифт':a.tp==='car'?'Машинка':'Батут';
+  const isBatut = a.tp==='bat';
+  const tname = a.tp==='drift'?'Дрифт':a.tp==='car'?'Машинка':'Батут';
+  const ico = a.tp==='drift'?'🏎️':a.tp==='car'?'🚗':'🤸';
+  // Батут записываем без номера — просто «Батут»
+  const entryName = (isRet?'↩ ':'') + ico + ' ' + tname + (isBatut?'':' №'+a.num);
   return {
     id:Date.now(),num:log.length+1,
     tp:a.tp,vid:id,
-    name:(isRet?'↩ ':'')+`${a.tp==='drift'?'🏎️':a.tp==='car'?'🚗':'🤸'} ${tname} №${a.num}`,
+    name:entryName,
     st:sd.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),
     et:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),
     date:sd.toLocaleDateString('ru-RU'),
