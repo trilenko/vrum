@@ -356,7 +356,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);display:flex;f
 
 <script>
 let C=JSON.parse(localStorage.getItem('cfg4')||'{}');
-if(!C.url) C.url='https://script.google.com/macros/s/AKfycbzzlqdboQwftzH-8gbd7iEYMok7LYqpfReHLZPMNQ-_BC7Ru5nbmpx8WVaaElq7QPUE/exec';
+if(!C.url) C.url='https://script.google.com/macros/s/AKfycbzlHHpG-ykRcW_74RGV42Hyk3Ou0YSTbK1Vsr-O5NX5SyUgigOl7doMrheQPBkUzFLY/exec';
 if(!C.ops) C.ops='Слава,Никита,Максим,Климентий,Александр,Виктор,Гость1,Гость2';
 
 // PIN-коды операторов (имя → PIN)
@@ -486,7 +486,20 @@ function tick(){
 }
 
 
-function onPtChange(){buildGrids();}
+function idType(id){
+  // ID формат: [prefix][type][num] например цd6, цc47, цb1, тc27, тb1
+  // prefix = ц или т (или пусто для старых)
+  // type = d(дрифт), c(машинка), b(батут)
+  if(/[db]/.test(id) && !/^[цт]?c/.test(id)) {
+    if(/[цт]?b\d/.test(id)) return 'bat';
+    if(/[цт]?d\d/.test(id)) return 'drift';
+  }
+  if(/[цт]?c\d/.test(id)) return 'car';
+  if(/[цт]?b\d/.test(id)) return 'bat';
+  if(/[цт]?d\d/.test(id)) return 'drift';
+  return 'car';
+}
+function isBat(id){ return idType(id)==='bat'; }
 
 // Конфиг по точкам
 // Номера машинок по точкам
@@ -574,7 +587,7 @@ function applyBC(el,id){
 function updateTimers(){
   Object.keys(active).forEach(id=>{
     const el=document.getElementById('vc-'+id);if(!el)return;
-    id.startsWith('b')?applyBC(el,id):applyVC(el,id);
+    isBat(id)?applyBC(el,id):applyVC(el,id);
   });
   updFree();
 }
@@ -626,7 +639,7 @@ function bcTap(id,num){
 
 function doStart(pay){
   const id=pid;if(!id)return;
-  const tp=id.startsWith('d')?'drift':id.startsWith('c')?'car':'bat';
+  const tp=idType(id);
   const num=parseInt(id.replace(/\D/g,''));
   active[id]={id,tp,num,pay,ms:Date.now(),
     op:getCurrentOp(),
@@ -634,7 +647,7 @@ function doStart(pay){
     price:PR[tp]};
   saveA();closeM('m-pay');
   const el=document.getElementById('vc-'+id);
-  if(el){id.startsWith('b')?applyBC(el,id):applyVC(el,id);}
+  if(el){isBat(id)?applyBC(el,id):applyVC(el,id);}
   updFree();showToast('▶ Запущено!');
 }
 
@@ -646,7 +659,7 @@ function doStop(){
   log.unshift(e);delete active[id];saveA();saveL();
   closeM('m-stop');
   const el=document.getElementById('vc-'+id);
-  if(el){id.startsWith('b')?applyBC(el,id):applyVC(el,id);}
+  if(el){isBat(id)?applyBC(el,id):applyVC(el,id);}
   updFree();renderLog();renderSal();
   showToast(`⏹ ${mins}мин · ${a.price}₽`);sync(e);
 }
@@ -662,7 +675,7 @@ function doRet(){
   log.unshift(e);delete active[id];saveA();saveL();
   closeM('m-ret');
   const el=document.getElementById('vc-'+id);
-  if(el){id.startsWith('b')?applyBC(el,id):applyVC(el,id);}
+  if(el){isBat(id)?applyBC(el,id):applyVC(el,id);}
   updFree();renderLog();
   showToast(`↩ Возврат: ${retR}`,true);sync(e);
 }
