@@ -1,558 +1,511 @@
-// ═══════════════════════════════════════════════════════════
-// ВРУМ — Google Apps Script v5
-// Финансовый учёт: расходы, P&L по точкам, сверка банка
-// ═══════════════════════════════════════════════════════════
-
-const SHEET_LOG      = 'Журнал';
-const SHEET_ACTIVE   = 'Активные';
-const SHEET_ANALYTIC = 'Аналитика';
-const SHEET_EXPENSES = 'Расходы';
-const SHEET_PNL      = 'P&L';
-const SHEET_BANK     = 'Сверка банка';
-
-// Фиксированные расходы по точкам (₽/месяц)
-const FIXED_COSTS = {
-  'Цесаревича': { rent: 82222 },
-  'Татарка':    { rent: 40000 },
-};
-
-function doGet(e) {
-  const p = e.parameter;
-
-  if (p.action === 'addRow') {
-    try { addRow(p); updateAnalytics(); updatePnL(); return ok(); }
-    catch(err) { return fail(err); }
-  }
-  if (p.action === 'saveActive') {
-    try { saveActive(p.point, p.data); return ok(); }
-    catch(err) { return fail(err); }
-  }
-  if (p.action === 'getActive') {
-    try { return okData(getActive(p.point)); }
-    catch(err) { return fail(err); }
-  }
-  if (p.action === 'getData') {
-    try { return okData(getData()); }
-    catch(err) { return fail(err); }
-  }
-  if (p.action === 'addExpense') {
-    try { addExpense(p); updatePnL(); return ok(); }
-    catch(err) { return fail(err); }
-  }
-  if (p.action === 'getFinance') {
-    try { return okData(getFinance(p.month, p.year)); }
-    catch(err) { return fail(err); }
-  }
-  if (p.action === 'addBankEntry') {
-    try { addBankEntry(p); return ok(); }
-    catch(err) { return fail(err); }
-  }
-
-  return okData({status:'ok', message:'ВРУМ API v5'});
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ВРУМ — Скрипты оператора</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;600&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#080808;--s1:#111;--s2:#181818;--s3:#222;--border:#2a2a2a;
+  --accent:#FFD600;--green:#00E676;--red:#FF1744;--blue:#2979FF;
+  --orange:#FF6D00;--purple:#D500F9;--text:#F0F0F0;--muted:#555;
+  --ff:'Bebas Neue',sans-serif;--fm:'JetBrains Mono',monospace;--fb:'Manrope',sans-serif;
 }
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--text);font-family:var(--fb);min-height:100vh;padding-bottom:60px}
 
-function doPost(e) {
-  try {
-    const d = JSON.parse(e.postData.contents);
-    if (d.action === 'addRow')     { addRow(d.data);    updateAnalytics(); updatePnL(); return ok(); }
-    if (d.action === 'saveActive') { saveActive(d.point, d.data); return ok(); }
-    if (d.action === 'addExpense') { addExpense(d.data); updatePnL(); return ok(); }
-  } catch(err) { return fail(err); }
-  return fail('unknown action');
+.hdr{background:var(--s1);border-bottom:2px solid var(--accent);padding:12px 16px;position:sticky;top:0;z-index:50}
+.logo{font-family:var(--ff);font-size:22px;letter-spacing:3px;color:var(--accent)}
+.sub{font-family:var(--fm);font-size:9px;color:var(--muted);letter-spacing:2px;margin-top:2px}
+
+/* TABS */
+.tabs{display:flex;background:var(--s1);border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0}
+.tab{flex-shrink:0;padding:10px 14px;font-family:var(--ff);font-size:13px;letter-spacing:1px;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}
+.tab.on{color:var(--accent);border-color:var(--accent)}
+
+.page{display:none;padding:12px}
+.page.on{display:block}
+
+/* SECTION */
+.sec{margin-bottom:16px}
+.sec-title{font-family:var(--ff);font-size:18px;letter-spacing:2px;color:var(--accent);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+
+/* КЛИЕНТ КАРТОЧКА */
+.client-card{background:var(--s2);border:2px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:10px}
+.cc-header{padding:10px 14px;display:flex;align-items:center;gap:10px}
+.cc-icon{font-size:28px}
+.cc-title{font-family:var(--ff);font-size:20px;letter-spacing:1px}
+.cc-sub{font-family:var(--fm);font-size:9px;color:var(--muted);margin-top:2px}
+.cc-body{padding:0 14px 12px}
+
+/* СКРИПТ БЛОК */
+.script-block{background:var(--s3);border-radius:10px;padding:12px;margin-bottom:8px;border-left:3px solid var(--border)}
+.script-block.green{border-left-color:var(--green)}
+.script-block.yellow{border-left-color:var(--accent)}
+.script-block.blue{border-left-color:var(--blue)}
+.script-block.orange{border-left-color:var(--orange)}
+.script-block.red{border-left-color:var(--red)}
+.script-block.purple{border-left-color:var(--purple)}
+
+.sb-label{font-family:var(--fm);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.sb-label.green{color:var(--green)} .sb-label.yellow{color:var(--accent)}
+.sb-label.blue{color:var(--blue)} .sb-label.orange{color:var(--orange)}
+.sb-label.red{color:var(--red)} .sb-label.purple{color:var(--purple)}
+
+.sb-text{font-size:14px;line-height:1.7;color:var(--text)}
+.sb-text em{color:var(--accent);font-style:normal;font-weight:700}
+.sb-note{font-family:var(--fm);font-size:10px;color:var(--muted);margin-top:6px;line-height:1.6;font-style:italic}
+
+/* ПРАВИЛА */
+.rules{background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px}
+.rule-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);align-items:flex-start}
+.rule-item:last-child{border-bottom:none}
+.rule-ico{font-size:20px;flex-shrink:0;width:28px;text-align:center}
+.rule-text{font-size:13px;line-height:1.5;color:var(--text)}
+.rule-text b{color:var(--accent)}
+
+/* ЗАПРЕЩЕНО */
+.dont{background:#1a0505;border:1px solid var(--red);border-radius:10px;padding:12px;margin-bottom:8px}
+.dont-title{font-family:var(--ff);font-size:14px;color:var(--red);letter-spacing:1px;margin-bottom:6px}
+.dont-item{font-family:var(--fm);font-size:10px;color:#ff6666;line-height:2;display:flex;gap:6px}
+
+/* ПРОДАЖИ */
+.upsell{background:var(--s2);border:2px solid var(--accent);border-radius:14px;overflow:hidden;margin-bottom:10px}
+.upsell-header{background:var(--accent);padding:8px 14px;font-family:var(--ff);font-size:16px;letter-spacing:1px;color:#000}
+.upsell-body{padding:12px}
+.upsell-case{background:var(--s3);border-radius:8px;padding:10px;margin-bottom:8px}
+.uc-when{font-family:var(--fm);font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:5px}
+.uc-say{font-size:13px;line-height:1.7;color:var(--text)}
+.uc-say em{color:var(--green);font-style:normal;font-weight:700}
+.uc-result{font-family:var(--fm);font-size:9px;color:var(--green);margin-top:5px}
+
+/* СИТУАЦИИ */
+.situation{background:var(--s2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:8px}
+.sit-q{background:var(--s3);padding:10px 14px;font-size:13px;font-weight:700;color:var(--text);display:flex;gap:8px;align-items:flex-start}
+.sit-q::before{content:'❓';flex-shrink:0}
+.sit-a{padding:10px 14px;font-size:13px;line-height:1.7;color:var(--text);border-left:3px solid var(--green)}
+.sit-a em{color:var(--green);font-style:normal;font-weight:700}
+
+/* ПАМЯТКА */
+.memo{background:var(--accent);border-radius:12px;padding:14px;margin-bottom:10px}
+.memo-title{font-family:var(--ff);font-size:18px;letter-spacing:1px;color:#000;margin-bottom:8px}
+.memo-item{display:flex;gap:8px;margin-bottom:6px;align-items:flex-start}
+.memo-num{font-family:var(--ff);font-size:18px;color:#000;flex-shrink:0;width:24px}
+.memo-text{font-size:12px;color:#000;line-height:1.5;font-weight:600}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="logo">⚡ ВРУМ — Скрипты</div>
+  <div class="sub">Руководство оператора · Конфиденциально</div>
+</div>
+
+<div class="tabs">
+  <div class="tab on" onclick="goTab('meet',this)">👋 Встреча</div>
+  <div class="tab" onclick="goTab('kids',this)">🧒 С детьми</div>
+  <div class="tab" onclick="goTab('parents',this)">👨‍👩‍👧 С родит.</div>
+  <div class="tab" onclick="goTab('sales',this)">💰 Продажи</div>
+  <div class="tab" onclick="goTab('cases',this)">🔧 Ситуации</div>
+  <div class="tab" onclick="goTab('rules',this)">📋 Правила</div>
+</div>
+
+<!-- ═══════════════ ВСТРЕЧА ═══════════════ -->
+<div class="page on" id="page-meet">
+
+  <div class="sec">
+    <div class="sec-title">👋 ПЕРВЫЙ КОНТАКТ</div>
+
+    <div class="script-block green">
+      <div class="sb-label green">Когда подходят — говори сразу</div>
+      <div class="sb-text">«Привет! Добро пожаловать в <em>ВРУМ</em> — выбирайте любую машинку, <em>15 минут</em> за <em>500₽</em>. Оплата картой или QR.»</div>
+      <div class="sb-note">Называй цену сразу — это снимает главный вопрос и показывает уверенность</div>
+    </div>
+
+    <div class="script-block green" style="border-left-color:#00E676">
+      <div class="sb-label green">После оплаты — ВСЕГДА говори время окончания</div>
+      <div class="sb-text">«Отлично! Ваше время до <em>[называй время]</em> — следите пожалуйста, я скажу когда будет 2 минуты.»</div>
+      <div class="sb-note">⚡ Время окончания видно прямо в приложении на кнопке машинки — например «до 15:30». Называй это время родителю сразу после запуска. Родитель сам следит → ребёнок возвращается вовремя → ты не бегаешь за ними.</div>
+    </div>
+
+    <div class="script-block yellow">
+      <div class="sb-label yellow">Если смотрят но не подходят</div>
+      <div class="sb-text">«Хотите попробуете? Первый круг покажу как управлять — это очень просто!»</div>
+      <div class="sb-note">Не давить. Сказал один раз, дал человеку подумать</div>
+    </div>
+
+    <div class="script-block blue">
+      <div class="sb-label blue">Определи кто главный — ребёнок или родитель</div>
+      <div class="sb-text">Смотри кто смотрит на машинки с интересом.<br><br>
+      Если <em>ребёнок тянет за руку</em> — говори с ребёнком, родитель уже согласен.<br><br>
+      Если <em>родитель изучает</em> — говори с родителем, давай факты: безопасно, 15 минут, фиксированная цена.</div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">🔁 ПОСТОЯННЫЙ КЛИЕНТ</div>
+    <div class="script-block purple">
+      <div class="sb-label purple">Узнал знакомое лицо</div>
+      <div class="sb-text">«О, снова вы! Рады видеть. Та же машинка или попробуем что-то новое сегодня?»</div>
+      <div class="sb-note">Люди любят когда их помнят. Даже если не помнишь — делай вид что помнишь. Это работает</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════ С ДЕТЬМИ ═══════════════ -->
+<div class="page" id="page-kids">
+
+  <div class="sec">
+    <div class="sec-title">👶 МАЛЫШИ ДО 5 ЛЕТ</div>
+    <div class="client-card">
+      <div class="cc-header">
+        <div class="cc-icon">👶</div>
+        <div>
+          <div class="cc-title">Малыши · до 5 лет</div>
+          <div class="cc-sub">Говори с родителями · ребёнка хвали · всё просто</div>
+        </div>
+      </div>
+      <div class="cc-body">
+        <div class="script-block green">
+          <div class="sb-label green">Посадка в машинку</div>
+          <div class="sb-text">«Смотри какой крутой гонщик! Садись, я покажу как ехать. Вот педаль — нажимаешь и едешь, отпускаешь — останавливаешься. Всё просто!»</div>
+        </div>
+        <div class="script-block yellow">
+          <div class="sb-label yellow">Сразу говори время родителю</div>
+          <div class="sb-text">«Ваше время до <em>[время из приложения]</em> — следите пожалуйста, подойдите заранее.»</div>
+          <div class="sb-note">Посмотри на кнопку машинки в приложении — там написано например «до 15:30». Скажи это родителю сразу. Они сами придут вовремя — тебе не надо бегать и искать их по площадке.</div>
+        </div>
+        <div class="script-block yellow">
+          <div class="sb-label yellow">Если боится</div>
+          <div class="sb-text">«Не страшно, я рядом буду. Попробуй чуть-чуть — вот так, молодец! Видишь, ты уже едешь!»</div>
+          <div class="sb-note">Не торопи. Дай 30 секунд освоиться — потом поедет сам</div>
+        </div>
+        <div class="script-block blue">
+          <div class="sb-label blue">Во время катания</div>
+          <div class="sb-text">«О, смотри как быстро! Настоящий гонщик!»</div>
+          <div class="sb-note">Мини-похвала раз в 2-3 минуты — ребёнок счастлив, родитель видит что его замечают</div>
+        </div>
+        <div class="script-block orange">
+          <div class="sb-label orange">Конец проката</div>
+          <div class="sb-text">«Всё, время вышло. Ты сегодня отлично катался! Будем ждать тебя снова, гонщик!»</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">🧒 ДЕТИ 5-10 ЛЕТ</div>
+    <div class="client-card">
+      <div class="cc-header">
+        <div class="cc-icon">🧒</div>
+        <div>
+          <div class="cc-title">Дети · 5-10 лет</div>
+          <div class="cc-sub">Главная аудитория · говори как с равным · не сюсюкай</div>
+        </div>
+      </div>
+      <div class="cc-body">
+        <div class="script-block green">
+          <div class="sb-label green">При выборе машинки</div>
+          <div class="sb-text">«Какую берёшь? Дрифт самый быстрый — он заносится в поворотах. Или классическую? Обе крутые.»</div>
+          <div class="sb-note">Дай выбор — ребёнок чувствует себя взрослым когда сам решает</div>
+        </div>
+        <div class="script-block yellow">
+          <div class="sb-label yellow">Инструктаж</div>
+          <div class="sb-text">«Значит так: педаль газа — едешь, руль — поворачиваешь. Дрифт умеет заносить — попробуй в повороте держать газ. Понял? Поехали!»</div>
+        </div>
+        <div class="script-block blue">
+          <div class="sb-label blue">Завязать разговор во время катания</div>
+          <div class="sb-text">«В игры на телефоне играешь? В гонки? Тут похоже, только настоящее!»</div>
+          <div class="sb-text" style="margin-top:6px">«Первый раз у нас? Как тебе? Быстро едет?»</div>
+        </div>
+        <div class="script-block orange">
+          <div class="sb-label orange">Перед окончанием</div>
+          <div class="sb-text">«Ещё 2 минуты осталось — хочешь последний круг побыстрее?»</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">🧑 ДЕТИ 10-14 ЛЕТ</div>
+    <div class="client-card">
+      <div class="cc-header">
+        <div class="cc-icon">🧑</div>
+        <div>
+          <div class="cc-title">Подростки · 10-14 лет</div>
+          <div class="cc-sub">Говори как со взрослым · не опекай · уважай</div>
+        </div>
+      </div>
+      <div class="cc-body">
+        <div class="script-block green">
+          <div class="sb-label green">При выборе</div>
+          <div class="sb-text">«Дрифт или машинка? Дрифт мощнее — развернёшь в повороте если умеешь. Пробовал уже?»</div>
+        </div>
+        <div class="script-block yellow">
+          <div class="sb-label yellow">Если уже катался раньше</div>
+          <div class="sb-text">«О, значит уже знаешь что к чему. Попробуй сегодня <em>дрифт</em> — там управление другое, интереснее.»</div>
+        </div>
+        <div class="script-block blue">
+          <div class="sb-label blue">Не говори лишнего</div>
+          <div class="sb-text">Подростки не любят когда их учат. Дал машинку — отошёл. Наблюдай издали. Если что-то пошло не так — подойди спокойно, без паники.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════ С РОДИТЕЛЯМИ ═══════════════ -->
+<div class="page" id="page-parents">
+
+  <div class="sec">
+    <div class="sec-title">👨‍👩‍👧 РОДИТЕЛЬ СТОИТ РЯДОМ</div>
+
+    <div class="script-block green">
+      <div class="sb-label green">Пока ребёнок катается — заговори</div>
+      <div class="sb-text">«Хорошо катается! Первый раз у вас?»</div>
+      <div class="sb-note">Простой вопрос открывает разговор. Дальше слушай — родитель сам расскажет</div>
+    </div>
+
+    <div class="script-block yellow">
+      <div class="sb-label yellow">Если родитель фотографирует</div>
+      <div class="sb-text">«Хотите я сфотографирую вас вместе когда закончит? Встаньте вот здесь — на фоне машинки хорошо получится.»</div>
+      <div class="sb-note">Родитель будет благодарен. Фото уйдёт в соцсети — это бесплатная реклама для ВРУМ</div>
+    </div>
+
+    <div class="script-block blue">
+      <div class="sb-label blue">Родитель выглядит торопливым</div>
+      <div class="sb-text">«Всё идёт по таймеру — ровно 15 минут, я скажу когда заканчивается. Можете отдохнуть пока.»</div>
+      <div class="sb-note">Снимаешь тревогу — родитель расслабляется и остаётся дольше</div>
+    </div>
+
+    <div class="script-block orange">
+      <div class="sb-label orange">Родитель беспокоится о безопасности</div>
+      <div class="sb-text">«Скорость небольшая, специально ограничена. Я всегда рядом слежу. Площадка ровная, всё безопасно.»</div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">👤 РОДИТЕЛЬ ОТОШЁЛ</div>
+    <div class="script-block purple">
+      <div class="sb-label purple">Родитель ушёл — ребёнок один</div>
+      <div class="sb-text">Следи за ребёнком внимательнее. Если ребёнок маленький и явно растерян — спроси спокойно: «Где мама или папа? Они рядом?»</div>
+      <div class="sb-note">Не пугай ребёнка. Просто убедись что всё в порядке</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════ ПРОДАЖИ ═══════════════ -->
+<div class="page" id="page-sales">
+
+  <div class="sec">
+    <div class="sec-title">💰 КАК ПРЕДЛАГАТЬ</div>
+
+    <div class="rules" style="margin-bottom:12px">
+      <div class="rule-item">
+        <div class="rule-ico">✅</div>
+        <div class="rule-text"><b>Одно предложение — один раз.</b> Предложил, получил ответ. Не повторяй дважды.</div>
+      </div>
+      <div class="rule-item">
+        <div class="rule-ico">✅</div>
+        <div class="rule-text"><b>Предлагай в нужный момент.</b> Не в самом начале и не когда уже уходят.</div>
+      </div>
+      <div class="rule-item">
+        <div class="rule-ico">✅</div>
+        <div class="rule-text"><b>Говори про выгоду для ребёнка</b>, а не про деньги.</div>
+      </div>
+      <div class="rule-item">
+        <div class="rule-ico">❌</div>
+        <div class="rule-text"><b>Не упрашивай.</b> Сказали нет — улыбнулся, отошёл.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">🔄 ЕЩЁ ОДИН КРУГ</div>
+    <div class="upsell">
+      <div class="upsell-header">Допродажа: ещё один прокат</div>
+      <div class="upsell-body">
+        <div class="upsell-case">
+          <div class="uc-when">За 2 минуты до конца</div>
+          <div class="uc-say">«Время заканчивается. <em>Хочешь ещё круг?</em> Это ещё 15 минут — всё то же самое.»</div>
+          <div class="uc-result">→ говоришь ребёнку, он сам просит родителя</div>
+        </div>
+        <div class="upsell-case">
+          <div class="uc-when">Когда ребёнок явно не хочет уходить</div>
+          <div class="uc-say">«Не хочешь заканчивать? Скажи маме или папе — можно взять ещё один заезд.»</div>
+          <div class="uc-result">→ ребёнок сам продаёт родителю</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">🤸 ПРЕДЛОЖИ БАТУТ</div>
+    <div class="upsell">
+      <div class="upsell-header">Кросс-продажа: батут после машинки</div>
+      <div class="upsell-body">
+        <div class="upsell-case">
+          <div class="uc-when">Когда прокат закончился и ребёнок доволен</div>
+          <div class="uc-say">«Кстати, у нас ещё батут — <em>20 минут за 400₽</em>. Там сейчас свободно, можно прямо сейчас.»</div>
+          <div class="uc-result">→ говоришь родителю, указываешь рукой на батут</div>
+        </div>
+        <div class="upsell-case">
+          <div class="uc-when">Если ребёнок сам смотрит на батут</div>
+          <div class="uc-say">«Хочешь на батут? Там тоже классно — прыгаешь сколько хочешь <em>20 минут</em>.»</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">🎯 ПРЕДЛОЖИ ШАРИК</div>
+    <div class="upsell">
+      <div class="upsell-header">Лопни шарик · 300₽ · быстрая продажа</div>
+      <div class="upsell-body">
+        <div class="upsell-case">
+          <div class="uc-when">Пока ребёнок катается — родителю</div>
+          <div class="uc-say">«Пока ждёте — у нас ещё аттракцион "Лопни шарик", <em>300₽</em>. Дети обожают — выигрывают приз.»</div>
+        </div>
+        <div class="upsell-case">
+          <div class="uc-when">После окончания проката — ребёнку</div>
+          <div class="uc-say">«Хочешь выиграть приз? Вон там шарики — стреляешь и получаешь подарок!»</div>
+          <div class="uc-result">→ работает почти всегда с детьми до 10 лет</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">🔁 ПРИХОДИТЕ СНОВА</div>
+    <div class="script-block green">
+      <div class="sb-label green">При уходе — всегда говори это</div>
+      <div class="sb-text">«Спасибо что были у нас! Ждём вас снова — в выходные у нас обычно весело, много детей.»</div>
+      <div class="sb-note">Простое приглашение увеличивает возврат. Говори каждому уходящему клиенту</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════ СИТУАЦИИ ═══════════════ -->
+<div class="page" id="page-cases">
+
+  <div class="sec">
+    <div class="sec-title">🔧 СЛОЖНЫЕ СИТУАЦИИ</div>
+
+    <div class="situation">
+      <div class="sit-q">Ребёнок плачет и не хочет слезать с машинки</div>
+      <div class="sit-a">Не торопи и не дави. Скажи спокойно: «Машинка устала, ей нужно отдохнуть. Но ты можешь прийти завтра снова!» Если не помогает — зови родителя взглядом.</div>
+    </div>
+
+    <div class="situation">
+      <div class="sit-q">Родитель недоволен что время закончилось</div>
+      <div class="sit-a"><em>«Всё верно — ровно 15 минут как и договаривались. Если хотите продолжить — можем сразу оплатить ещё один заезд.»</em> Не извиняйся за правила — они для всех одинаковые.</div>
+    </div>
+
+    <div class="situation">
+      <div class="sit-q">Машинка сломалась во время проката</div>
+      <div class="sit-a">«Приношу извинения, машинка подвела. Сейчас пересадим на другую — время засчитаем с начала.» Не объясняй долго, сразу предложи решение.</div>
+    </div>
+
+    <div class="situation">
+      <div class="sit-q">Клиент просит скидку</div>
+      <div class="sit-a">«У нас фиксированные цены для всех — <em>500₽</em> за 15 минут. Зато качество стабильное и машинки всегда заряжены.» Не извиняйся и не торгуйся.</div>
+    </div>
+
+    <div class="situation">
+      <div class="sit-q">Дети дерутся или спорят из-за машинки</div>
+      <div class="sit-a">Подойди спокойно: «Ребята, всем хватит машинок — вот эта свободна прямо сейчас.» Переключи внимание на решение, а не на конфликт.</div>
+    </div>
+
+    <div class="situation">
+      <div class="sit-q">Родитель хочет сам сесть в машинку</div>
+      <div class="sit-a">«Машинки рассчитаны на детей до 50 кг — к сожалению, для взрослых не подойдёт. Но можно снять на видео как ребёнок едет — встаньте вот здесь, хороший ракурс!»</div>
+    </div>
+
+    <div class="situation">
+      <div class="sit-q">Клиент спрашивает про скоро открытие / закрытие</div>
+      <div class="sit-a">«Работаем с 10 утра, закрываемся когда погода позволяет — обычно до 21-22 часов.»</div>
+    </div>
+
+    <div class="situation">
+      <div class="sit-q">Агрессивный или грубый клиент</div>
+      <div class="sit-a">Говори тихо и спокойно — это сбивает агрессию. «Понимаю вас. Давайте разберёмся — что именно случилось?» Не повышай голос в ответ. Если совсем плохо — звони владельцу.</div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- ═══════════════ ПРАВИЛА ═══════════════ -->
+<div class="page" id="page-rules">
+
+  <div class="memo">
+    <div class="memo-title">⚡ ПАМЯТКА ОПЕРАТОРА</div>
+    <div class="memo-item"><div class="memo-num">1</div><div class="memo-text">Улыбайся при встрече — всегда, даже в плохой день</div></div>
+    <div class="memo-item"><div class="memo-num">2</div><div class="memo-text">Называй время и цену сразу — не жди пока спросят</div></div>
+    <div class="memo-item"><div class="memo-num">3</div><div class="memo-text" style="color:#FFD600"><strong>После запуска СРАЗУ говори родителю: «Ваше время до [время]» — смотришь в приложение на кнопку машинки</strong></div></div>
+    <div class="memo-item"><div class="memo-num">4</div><div class="memo-text">С ребёнком говори с ребёнком, с родителем — с родителем</div></div>
+    <div class="memo-item"><div class="memo-num">5</div><div class="memo-text">Хвали ребёнка во время катания — раз в 2-3 минуты</div></div>
+    <div class="memo-item"><div class="memo-num">6</div><div class="memo-text">Предложи батут или шарик — один раз, без давления</div></div>
+    <div class="memo-item"><div class="memo-num">7</div><div class="memo-text">Каждому уходящему: «Ждём вас снова!»</div></div>
+    <div class="memo-item"><div class="memo-num">8</div><div class="memo-text">Все платежи только через терминал или QR — наличные не принимаем</div></div>
+    <div class="memo-item"><div class="memo-num">9</div><div class="memo-text">Каждый прокат фиксируй в приложении сразу</div></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">❌ НИКОГДА НЕ ДЕЛАЙ</div>
+    <div class="dont">
+      <div class="dont-title">Запрещено</div>
+      <div class="dont-item"><span>🚫</span>Не принимай наличные мимо кассы</div>
+      <div class="dont-item"><span>🚫</span>Не сиди в телефоне когда есть клиенты</div>
+      <div class="dont-item"><span>🚫</span>Не говори «не знаю» — говори «сейчас уточню»</div>
+      <div class="dont-item"><span>🚫</span>Не спорь с клиентом публично</div>
+      <div class="dont-item"><span>🚫</span>Не уходи с точки без замены</div>
+      <div class="dont-item"><span>🚫</span>Не игнорируй разряженные машинки</div>
+      <div class="dont-item"><span>🚫</span>Не обещай скидки без разрешения владельца</div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">✅ ВСЕГДА ДЕЛАЙ</div>
+    <div class="rules">
+      <div class="rule-item">
+        <div class="rule-ico">💚</div>
+        <div class="rule-text"><b>Встречай стоя</b> — не сиди когда подходит клиент</div>
+      </div>
+      <div class="rule-item">
+        <div class="rule-ico">📱</div>
+        <div class="rule-text"><b>Фиксируй прокат в приложении</b> сразу после оплаты</div>
+      </div>
+      <div class="rule-item">
+        <div class="rule-ico">🔋</div>
+        <div class="rule-text"><b>Следи за зарядом</b> — разряженная машинка сразу на зарядку</div>
+      </div>
+      <div class="rule-item">
+        <div class="rule-ico">📸</div>
+        <div class="rule-text"><b>Предложи сфотографировать</b> ребёнка для родителей</div>
+      </div>
+      <div class="rule-item">
+        <div class="rule-ico">🧹</div>
+        <div class="rule-text"><b>Протирай машинки</b> после каждой смены</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function goTab(name, el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  el.classList.add('on');
+  document.getElementById('page-'+name).classList.add('on');
+  window.scrollTo(0,0);
 }
-
-// ── ОТВЕТЫ ──────────────────────────────────────────────
-function ok()      { return res({status:'ok'}); }
-function okData(d) { return res(d); }
-function fail(e)   { return res({status:'error', message:String(e)}); }
-function res(d) {
-  return ContentService.createTextOutput(JSON.stringify(d))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-// ── РАСХОДЫ ─────────────────────────────────────────────
-function addExpense(d) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(SHEET_EXPENSES);
-
-  if (!sheet) {
-    sheet = ss.insertSheet(SHEET_EXPENSES);
-    const headers = ['Дата','Точка','Категория','Сумма','Комментарий','Записано'];
-    sheet.appendRow(headers);
-    const hr = sheet.getRange(1,1,1,headers.length);
-    hr.setBackground('#FF6D00').setFontColor('#fff').setFontWeight('bold').setFontSize(11);
-    sheet.setFrozenRows(1);
-    [90,110,120,90,200,140].forEach((w,i)=>sheet.setColumnWidth(i+1,w));
-
-    // Заполним фиксированные расходы автоматически при создании
-    addFixedExpensesIfNeeded(sheet);
-  }
-
-  const dateStr = formatDate(d.date || new Date().toLocaleDateString('ru-RU'));
-
-  sheet.appendRow([
-    dateStr,
-    d.point || '',
-    d.category || 'Прочее',
-    Number(d.amount) || 0,
-    d.comment || '',
-    new Date().toLocaleString('ru-RU')
-  ]);
-
-  const lastRow = sheet.getLastRow();
-  const catColors = {
-    'ЗП':         '#e8f5e9',
-    'Аренда':     '#e3f2fd',
-    'Оборудование':'#fff8e1',
-    'Ремонт':     '#fce4ec',
-    'Расходники': '#f3e5f5',
-    'Прочее':     '#f5f5f5',
-  };
-  const color = catColors[d.category] || '#fff';
-  sheet.getRange(lastRow, 1, 1, 6).setBackground(color);
-  sheet.getRange(lastRow, 4).setFontWeight('bold');
-}
-
-function addFixedExpensesIfNeeded(sheet) {
-  // Автоматически добавляет аренду на текущий месяц при первом создании
-  const now = new Date();
-  const dateStr = '01.' + String(now.getMonth()+1).padStart(2,'0') + '.' + now.getFullYear();
-  Object.entries(FIXED_COSTS).forEach(([point, costs]) => {
-    sheet.appendRow([dateStr, point, 'Аренда', costs.rent, 'Автоматически (фикс.)', new Date().toLocaleString('ru-RU')]);
-  });
-}
-
-// ── СВЕРКА БАНКА ────────────────────────────────────────
-function addBankEntry(d) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(SHEET_BANK);
-
-  if (!sheet) {
-    sheet = ss.insertSheet(SHEET_BANK);
-    const headers = ['Дата','Точка','По приложению ₽','Пришло в банк ₽','Разница ₽','Статус','Комментарий'];
-    sheet.appendRow(headers);
-    sheet.getRange(1,1,1,headers.length).setBackground('#1565c0').setFontColor('#fff').setFontWeight('bold');
-    sheet.setFrozenRows(1);
-    [90,110,130,130,100,80,150].forEach((w,i)=>sheet.setColumnWidth(i+1,w));
-  }
-
-  const appAmount  = Number(d.appAmount) || 0;
-  const bankAmount = Number(d.bankAmount) || 0;
-  const diff       = bankAmount - appAmount;
-  const status     = Math.abs(diff) < 10 ? '✅ OK' : diff < 0 ? '⚠ Недостача' : '❓ Излишек';
-
-  sheet.appendRow([
-    formatDate(d.date || new Date().toLocaleDateString('ru-RU')),
-    d.point || '',
-    appAmount, bankAmount, diff, status,
-    d.comment || ''
-  ]);
-
-  const lastRow = sheet.getLastRow();
-  const color = Math.abs(diff)<10 ? '#e8f5e9' : diff<0 ? '#ffcdd2' : '#fff9c4';
-  sheet.getRange(lastRow, 1, 1, 7).setBackground(color);
-  sheet.getRange(lastRow, 5).setFontWeight('bold');
-}
-
-// ── ФИНАНСЫ ДЛЯ ДАШБОРДА ────────────────────────────────
-function getFinance(month, year) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const now = new Date();
-  const m = parseInt(month) || (now.getMonth() + 1);
-  const y = parseInt(year)  || now.getFullYear();
-
-  // Выручка из журнала
-  const journal = ss.getSheetByName(SHEET_LOG);
-  const revenue = { 'Цесаревича': 0, 'Татарка': 0, total: 0 };
-  if (journal) {
-    const rows = journal.getDataRange().getValues().slice(1);
-    rows.forEach(r => {
-      if (r[11] === 'Да') return; // возврат
-      const dateStr = formatDate(String(r[0]||''));
-      const parts = dateStr.split('.');
-      if (parts.length !== 3) return;
-      const rowM = parseInt(parts[1]);
-      const rowY = parseInt(parts[2].length===2?'20'+parts[2]:parts[2]);
-      if (rowM !== m || rowY !== y) return;
-      const amount = Number(r[7]) || 0;
-      const point  = String(r[10]||'').trim();
-      revenue.total += amount;
-      if (revenue[point] !== undefined) revenue[point] += amount;
-    });
-  }
-
-  // Расходы
-  const expSheet = ss.getSheetByName(SHEET_EXPENSES);
-  const expenses = {
-    'Цесаревича': { total: 0, byCategory: {} },
-    'Татарка':    { total: 0, byCategory: {} },
-    total: 0,
-  };
-
-  // Добавляем фиксированную аренду
-  Object.entries(FIXED_COSTS).forEach(([point, costs]) => {
-    expenses[point].total += costs.rent;
-    expenses[point].byCategory['Аренда'] = (expenses[point].byCategory['Аренда']||0) + costs.rent;
-    expenses.total += costs.rent;
-  });
-
-  if (expSheet) {
-    const rows = expSheet.getDataRange().getValues().slice(1);
-    rows.forEach(r => {
-      const dateStr = formatDate(String(r[0]||''));
-      const parts = dateStr.split('.');
-      if (parts.length !== 3) return;
-      const rowM = parseInt(parts[1]);
-      const rowY = parseInt(parts[2].length===2?'20'+parts[2]:parts[2]);
-      if (rowM !== m || rowY !== y) return;
-      const point    = String(r[1]||'').trim();
-      const category = String(r[2]||'Прочее').trim();
-      const amount   = Number(r[3]) || 0;
-      if (!amount) return;
-      if (expenses[point]) {
-        expenses[point].total += amount;
-        expenses[point].byCategory[category] = (expenses[point].byCategory[category]||0) + amount;
-      }
-      expenses.total += amount;
-    });
-  }
-
-  // P&L
-  const pnl = {
-    'Цесаревича': revenue['Цесаревича'] - expenses['Цесаревича'].total,
-    'Татарка':    revenue['Татарка']    - expenses['Татарка'].total,
-    total:        revenue.total - expenses.total,
-  };
-
-  // Сверка банка за месяц
-  const bankSheet = ss.getSheetByName(SHEET_BANK);
-  const bankRows = [];
-  if (bankSheet) {
-    const rows = bankSheet.getDataRange().getValues().slice(1);
-    rows.forEach(r => {
-      const dateStr = formatDate(String(r[0]||''));
-      const parts = dateStr.split('.');
-      if (parts.length !== 3) return;
-      const rowM = parseInt(parts[1]);
-      const rowY = parseInt(parts[2].length===2?'20'+parts[2]:parts[2]);
-      if (rowM !== m || rowY !== y) return;
-      bankRows.push({
-        date: dateStr, point: r[1],
-        app: Number(r[2])||0, bank: Number(r[3])||0,
-        diff: Number(r[4])||0, status: r[5],
-      });
-    });
-  }
-
-  return { revenue, expenses, pnl, bankRows, month: m, year: y };
-}
-
-// ── P&L ЛИСТ ────────────────────────────────────────────
-function updatePnL() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(SHEET_PNL);
-  if (!sheet) sheet = ss.insertSheet(SHEET_PNL);
-  sheet.clearContents(); sheet.clearFormats();
-
-  const now = new Date();
-  const finance = getFinance(now.getMonth()+1, now.getFullYear());
-
-  let r = 1;
-  const ttl = (row, cols, bg, fc) => {
-    sheet.getRange(row,1,1,cols.length).setValues([cols])
-      .setFontWeight('bold').setBackground(bg||'#000').setFontColor(fc||'#FFD600').setFontSize(11);
-  };
-  const hdr = (row, cols) => {
-    sheet.getRange(row,1,1,cols.length).setValues([cols])
-      .setFontWeight('bold').setBackground('#333').setFontColor('#fff');
-  };
-  const row = (row, cols, bg) => {
-    sheet.getRange(row,1,1,cols.length).setValues([cols]);
-    if(bg) sheet.getRange(row,1,1,cols.length).setBackground(bg);
-  };
-
-  // Заголовок
-  const monthNames = ['','Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
-  ttl(r, [`📊 P&L ВРУМ — ${monthNames[finance.month]} ${finance.year} · обновлено: ${now.toLocaleString('ru-RU')}`, '', ''], '#FFD600', '#000');
-  r += 2;
-
-  // Итог по бизнесу
-  ttl(r, ['💼 ОБЩИЙ ИТОГ', '', ''], '#111', '#FFD600'); r++;
-  hdr(r, ['Показатель', 'Сумма ₽', '']); r++;
-  row(r, ['Выручка', finance.revenue.total, ''], '#e8f5e9'); r++;
-  row(r, ['Расходы', finance.expenses.total, ''], '#ffcdd2'); r++;
-  const profitColor = finance.pnl.total >= 0 ? '#c8e6c9' : '#ffcdd2';
-  sheet.getRange(r,1,1,2).setValues([['ПРИБЫЛЬ', finance.pnl.total]]).setFontWeight('bold').setFontSize(12).setBackground(profitColor);
-  r += 2;
-
-  // По точкам
-  ['Цесаревича', 'Татарка'].forEach(point => {
-    const rent = FIXED_COSTS[point]?.rent || 0;
-    ttl(r, [`🏠 ${point.toUpperCase()}`, '', ''], '#1a1a1a', '#FFD600'); r++;
-    hdr(r, ['Статья', 'Сумма ₽', '']); r++;
-    row(r, ['Выручка', finance.revenue[point], ''], '#e8f5e9'); r++;
-
-    // Расходы по категориям
-    const cats = finance.expenses[point].byCategory;
-    Object.entries(cats).forEach(([cat, amt]) => {
-      row(r, [cat, amt, ''], '#fff8e1'); r++;
-    });
-
-    row(r, ['ИТОГО расходы', finance.expenses[point].total, ''], '#ffcdd2'); r++;
-    const ptProfit = finance.pnl[point];
-    const ptColor  = ptProfit >= 0 ? '#c8e6c9' : '#ffcdd2';
-    sheet.getRange(r,1,1,2).setValues([[`ПРИБЫЛЬ ${point}`, ptProfit]])
-      .setFontWeight('bold').setBackground(ptColor);
-    r += 2;
-  });
-
-  // Аренда напоминание
-  ttl(r, ['🏢 ФИКСИРОВАННЫЕ РАСХОДЫ (ежемесячно)', '', ''], '#111', '#aaa'); r++;
-  hdr(r, ['Точка', 'Аренда ₽', '']); r++;
-  Object.entries(FIXED_COSTS).forEach(([point, costs]) => {
-    row(r, [point, costs.rent, '']); r++;
-  });
-  row(r, ['ИТОГО аренда', Object.values(FIXED_COSTS).reduce((s,c)=>s+c.rent,0), ''], '#e3f2fd');
-
-  [150, 100, 100].forEach((w,i) => sheet.setColumnWidth(i+1, w));
-}
-
-// ── ЖУРНАЛ ──────────────────────────────────────────────
-function addRow(d) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(SHEET_LOG);
-
-  if (!sheet) {
-    sheet = ss.insertSheet(SHEET_LOG);
-    const headers = ['Дата','День','№','Аттракцион','Старт','Финиш','Мин','Сумма','Оплата','Оператор','Точка','Возврат','Причина','Записано'];
-    sheet.appendRow(headers);
-    sheet.getRange(1,1,1,headers.length).setBackground('#FFD600').setFontWeight('bold').setFontSize(11);
-    sheet.setFrozenRows(1);
-    [90,55,40,120,60,60,45,70,65,90,110,60,100,130].forEach((w,i)=>sheet.setColumnWidth(i+1,w));
-  }
-
-  const dateStr = formatDate(d.date);
-  const dayName = getDayName(dateStr);
-
-  sheet.appendRow([
-    dateStr, dayName, d.num||'', d.car||'',
-    d.startTime||'', d.endTime||'', Number(d.duration)||0,
-    Number(d.amount)||0, d.pay||'', d.operator||'', d.point||'',
-    d.isReturn==='1'?'Да':'', d.returnReason||'',
-    new Date().toLocaleString('ru-RU')
-  ]);
-
-  const lastRow = sheet.getLastRow();
-  if (d.isReturn === '1') {
-    sheet.getRange(lastRow,1,1,14).setBackground('#1a0800').setFontColor('#ff8c00');
-  } else {
-    const payColors = {'Нал':'#d4edda','Пер':'#fff3cd','QR':'#e2d9f3','ОН':'#cce5ff'};
-    sheet.getRange(lastRow,9).setBackground(payColors[d.pay]||'#fff');
-    sheet.getRange(lastRow,8).setFontWeight('bold');
-  }
-}
-
-// ── ДАННЫЕ ДЛЯ ДАШБОРДА ─────────────────────────────────
-function getData() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(SHEET_LOG);
-  if (!sheet) return {rows:[]};
-
-  const data = sheet.getDataRange().getValues();
-  if (data.length < 2) return {rows:[]};
-
-  const rows = [];
-  data.slice(1).forEach(row => {
-    const obj = {
-      date:      formatDate(String(row[0]||'').trim()),
-      day:       String(row[1]||'').trim(),
-      num:       row[2],
-      car:       String(row[3]||'').trim(),
-      startTime: String(row[4]||'').trim(),
-      endTime:   String(row[5]||'').trim(),
-      duration:  Number(row[6])||0,
-      amount:    Number(row[7])||0,
-      pay:       String(row[8]||'').trim(),
-      operator:  String(row[9]||'').trim(),
-      point:     String(row[10]||'').trim(),
-      isReturn:  String(row[11]||'').trim()==='Да',
-    };
-    if (obj.date && obj.amount) rows.push(obj);
-  });
-  return {rows, total: rows.length};
-}
-
-// ── АКТИВНЫЕ ────────────────────────────────────────────
-function saveActive(point, dataStr) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(SHEET_ACTIVE);
-  if (!sheet) {
-    sheet = ss.insertSheet(SHEET_ACTIVE);
-    sheet.appendRow(['Точка','Данные','Обновлено']);
-    sheet.getRange(1,1,1,3).setBackground('#222').setFontColor('#FFD600').setFontWeight('bold');
-  }
-  const data = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === point) {
-      sheet.getRange(i+1,2).setValue(dataStr);
-      sheet.getRange(i+1,3).setValue(new Date().toLocaleString('ru-RU'));
-      return;
-    }
-  }
-  sheet.appendRow([point, dataStr, new Date().toLocaleString('ru-RU')]);
-}
-
-function getActive(point) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(SHEET_ACTIVE);
-  if (!sheet) return {active:{}, ts:0};
-  const data = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === point) {
-      try {
-        return {active: JSON.parse(data[i][1]), ts: new Date(data[i][2]).getTime()||0};
-      } catch(e) { return {active:{}, ts:0}; }
-    }
-  }
-  return {active:{}, ts:0};
-}
-
-// ── АНАЛИТИКА ───────────────────────────────────────────
-function updateAnalytics() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const journal = ss.getSheetByName(SHEET_LOG);
-  if (!journal) return;
-
-  let sheet = ss.getSheetByName(SHEET_ANALYTIC);
-  if (!sheet) sheet = ss.insertSheet(SHEET_ANALYTIC);
-  sheet.clearContents(); sheet.clearFormats();
-
-  const data = journal.getDataRange().getValues();
-  if (data.length < 2) return;
-  const rows = data.slice(1).filter(r => r[7] && r[11] !== 'Да');
-
-  const byDate={}, byCar={}, byOp={}, byPay={}, byDow={}, byPoint={}, byHour={};
-
-  rows.forEach(r => {
-    const date   = formatDate(String(r[0]||'')), day=r[1], car=r[3];
-    const amount = Number(r[7])||0, pay=r[8], op=r[9], point=r[10];
-    const hour   = r[4] ? parseInt(String(r[4]).split(':')[0]) : null;
-    if (!date||!amount) return;
-
-    const add = (obj,key,extra={}) => {
-      if(!obj[key]) obj[key]={count:0,total:0,...extra};
-      obj[key].count++; obj[key].total+=amount;
-    };
-    add(byDate, date, {day});
-    add(byCar,  car);
-    add(byOp,   op);
-    add(byPay,  pay);
-    add(byDow,  day);
-    add(byPoint,point);
-    if(hour!==null) add(byHour, hour);
-  });
-
-  const totalAll = rows.reduce((s,r)=>s+(Number(r[7])||0),0);
-  let r = 1;
-
-  const hdr = (row,cols) => { sheet.getRange(row,1,1,cols.length).setValues([cols]).setFontWeight('bold').setBackground('#333').setFontColor('#fff'); };
-  const ttl = (row,cols) => { sheet.getRange(row,1,1,cols.length).setValues([cols]).setFontWeight('bold').setBackground('#FFD600').setFontColor('#000'); };
-  const sec = (row,txt)  => { sheet.getRange(row,1).setValue(txt).setFontWeight('bold').setFontSize(12).setBackground('#111').setFontColor('#FFD600'); };
-  const setR= (row,cols) => { sheet.getRange(row,1,1,cols.length).setValues([cols]); };
-
-  sheet.getRange(r,1).setValue('📊 Аналитика ВРУМ — '+new Date().toLocaleString('ru-RU'))
-    .setFontWeight('bold').setFontSize(13).setBackground('#FFD600').setFontColor('#000');
-  r+=2;
-
-  sec(r,'🏠 По точкам'); r++;
-  hdr(r,['Точка','Прокатов','Выручка ₽','Ср. чек']); r++;
-  Object.entries(byPoint).sort((a,b)=>b[1].total-a[1].total).forEach(([pt,d])=>{
-    setR(r,[pt,d.count,d.total,Math.round(d.total/d.count)]); r++;
-  });
-  r++;
-
-  sec(r,'📅 Выручка по дням'); r++;
-  hdr(r,['Дата','День','Прокатов','Выручка ₽']); r++;
-  Object.keys(byDate).sort((a,b)=>{
-    const ts=s=>{const p=s.split('.');const yr=p[2]&&p[2].length===2?'20'+p[2]:p[2];return new Date(`${yr}-${(p[1]||'').padStart(2,'0')}-${(p[0]||'').padStart(2,'0')}`).getTime();};
-    return ts(b)-ts(a);
-  }).forEach(date=>{
-    const d=byDate[date];
-    sheet.getRange(r,1,1,4).setValues([[date,d.day,d.count,d.total]]);
-    sheet.getRange(r,4).setFontWeight('bold'); r++;
-  });
-  ttl(r,['Итого','',rows.length,totalAll]); r+=2;
-
-  sec(r,'⏰ Пики по часам'); r++;
-  hdr(r,['Час','Прокатов']); r++;
-  Object.keys(byHour).map(Number).sort((a,b)=>a-b).forEach(h=>{
-    setR(r,[h+':00', byHour[h].count]); r++;
-  });
-  r++;
-
-  sec(r,'🏆 По аттракционам'); r++;
-  hdr(r,['Аттракцион','Прокатов','Выручка ₽','%']); r++;
-  Object.entries(byCar).sort((a,b)=>b[1].total-a[1].total).forEach(([car,d])=>{
-    setR(r,[car,d.count,d.total,totalAll>0?Math.round(d.total/totalAll*100)+'%':'0%']); r++;
-  });
-  r++;
-
-  sec(r,'👤 По операторам'); r++;
-  hdr(r,['Оператор','Прокатов','Выручка ₽','Ср. чек']); r++;
-  Object.entries(byOp).sort((a,b)=>b[1].total-a[1].total).forEach(([op,d])=>{
-    setR(r,[op,d.count,d.total,Math.round(d.total/d.count)]); r++;
-  });
-  r++;
-
-  sec(r,'💳 Способы оплаты'); r++;
-  hdr(r,['Способ','Прокатов','Сумма ₽','%']); r++;
-  Object.entries(byPay).forEach(([pay,d])=>{
-    setR(r,[pay,d.count,d.total,totalAll>0?Math.round(d.total/totalAll*100)+'%':'0%']); r++;
-  });
-  r++;
-
-  sec(r,'📆 По дням недели'); r++;
-  hdr(r,['День','Прокатов','Выручка ₽']); r++;
-  ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].forEach(day=>{
-    if(byDow[day]){setR(r,[day,byDow[day].count,byDow[day].total]);r++;}
-  });
-
-  [120,60,90,100,80].forEach((w,i)=>sheet.setColumnWidth(i+1,w));
-}
-
-// ── УТИЛИТЫ ─────────────────────────────────────────────
-function formatDate(dateStr) {
-  if (!dateStr) return new Date().toLocaleDateString('ru-RU');
-  const s = String(dateStr).trim();
-
-  // Уже в формате DD.MM.YYYY
-  if (/^\d{2}\.\d{2}\.\d{4}$/.test(s)) return s;
-  // DD.MM.YY
-  if (/^\d{2}\.\d{2}\.\d{2}$/.test(s)) {
-    const p = s.split('.');
-    return p[0]+'.'+p[1]+'.20'+p[2];
-  }
-  // JS Date string: "Mon May 20 2026..."
-  if (s.includes(' ')) {
-    try {
-      const d = new Date(s);
-      if (!isNaN(d.getTime())) {
-        return String(d.getDate()).padStart(2,'0')+'.'
-          +String(d.getMonth()+1).padStart(2,'0')+'.'
-          +d.getFullYear();
-      }
-    } catch(e) {}
-  }
-  return s;
-}
-
-function getDayName(dateStr) {
-  const days = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
-  try {
-    const p = String(dateStr).split('.');
-    if (p.length !== 3) return '';
-    const yr = p[2].length===2?'20'+p[2]:p[2];
-    const dt = new Date(`${yr}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`);
-    return isNaN(dt.getTime()) ? '' : days[dt.getDay()];
-  } catch(e) { return ''; }
-}
+</script>
+</body>
+</html>
