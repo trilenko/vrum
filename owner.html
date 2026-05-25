@@ -132,7 +132,39 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);min-height:100
 .wc-diff{font-family:var(--fm);font-size:10px;margin-top:3px}
 .wc-diff.up{color:var(--green)} .wc-diff.down{color:var(--red)} .wc-diff.same{color:var(--muted)}
 
-.empty-state{text-align:center;padding:30px;color:var(--muted);font-family:var(--fm);font-size:11px;line-height:2}
+.fin-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.fin-card{background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:12px}
+.fin-card.profit{border-color:var(--green);background:#0a1a0a}
+.fin-card.loss{border-color:var(--red);background:#1a0505}
+.fin-card.neutral{border-color:var(--accent);background:#1a1500}
+.fin-label{font-family:var(--fm);font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:4px}
+.fin-val{font-family:var(--ff);font-size:28px;line-height:1}
+.fin-sub{font-family:var(--fm);font-size:9px;color:var(--muted);margin-top:3px}
+.fin-card.profit .fin-val{color:var(--green)}
+.fin-card.loss .fin-val{color:var(--red)}
+.fin-card.neutral .fin-val{color:var(--accent)}
+
+.exp-form{background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px}
+.ef-title{font-family:var(--ff);font-size:16px;letter-spacing:1px;color:var(--accent);margin-bottom:10px}
+.ef-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.ef-select,.ef-input{background:var(--s3);border:1px solid var(--border);color:var(--text);padding:9px 10px;border-radius:8px;font-family:var(--fm);font-size:12px;width:100%;outline:none}
+.ef-select:focus,.ef-input:focus{border-color:var(--accent)}
+.ef-btn{width:100%;background:var(--accent);border:none;color:#000;padding:12px;border-radius:8px;font-family:var(--ff);font-size:18px;cursor:pointer;letter-spacing:1px}
+.ef-btn:active{opacity:.8}
+
+.exp-table{background:var(--s2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:12px}
+.exp-row{display:grid;grid-template-columns:60px 80px 1fr auto;gap:6px;padding:9px 12px;border-bottom:1px solid var(--border);align-items:center}
+.exp-row:last-child{border-bottom:none}
+.exp-row.hdr{background:var(--s3);font-family:var(--fm);font-size:9px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+.exp-date{font-family:var(--fm);font-size:10px;color:var(--muted)}
+.exp-cat{font-family:var(--fm);font-size:10px;padding:2px 6px;border-radius:4px;text-align:center}
+.exp-desc{font-size:12px;color:var(--text)}
+.exp-amt{font-family:var(--fm);font-size:13px;font-weight:700;color:var(--red);text-align:right}
+
+.bank-form{background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px}
+.bank-row{display:grid;grid-template-columns:1fr auto;gap:6px;padding:8px 12px;border-bottom:1px solid var(--border);align-items:center}
+.bank-row:last-child{border-bottom:none}
+.bank-ok{color:var(--green)}.bank-warn{color:var(--red)}
 </style>
 </head>
 <body>
@@ -150,6 +182,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);min-height:100
   <div class="ptab" onclick="setPeriod('week',this)">7 дней</div>
   <div class="ptab" onclick="setPeriod('month',this)">30 дней</div>
   <div class="ptab" onclick="setPeriod('all',this)">Всё время</div>
+  <div class="ptab" onclick="showFinance(this)">💰 Финансы</div>
 </div>
 
 <div class="content" id="content">
@@ -160,7 +193,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);min-height:100
 </div>
 
 <script>
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzzlqdboQwftzH-8gbd7iEYMok7LYqpfReHLZPMNQ-_BC7Ru5nbmpx8WVaaElq7QPUE/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzlHHpG-ykRcW_74RGV42Hyk3Ou0YSTbK1Vsr-O5NX5SyUgigOl7doMrheQPBkUzFLY/exec';
 
 let allData = [];
 let period = 'today';
@@ -523,6 +556,109 @@ function fmtMoney(n){
   if(n>=1000000) return (n/1000000).toFixed(1)+'М';
   if(n>=1000) return (n/1000).toFixed(0)+'к';
   return String(n);
+}
+
+function showFinance(el){
+  document.querySelectorAll('.ptab').forEach(t=>t.classList.remove('on'));
+  el.classList.add('on');
+  const now = new Date();
+  loadFinance(now.getMonth()+1, now.getFullYear());
+}
+
+async function loadFinance(month, year){
+  document.getElementById('content').innerHTML=`<div class="loading"><div class="spinner"></div><div class="loading-text">Загружаем финансы...</div></div>`;
+  try{
+    const res=await fetch(SCRIPT_URL+'?action=getFinance&month='+month+'&year='+year);
+    const json=await res.json();
+    renderFinance(json, month, year);
+  }catch(e){ showError('Ошибка загрузки финансов'); }
+}
+
+function renderFinance(f, month, year){
+  const monthNames=['','Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+  const points = ['Цесаревича','Татарка'];
+  let html = '';
+
+  // Заголовок месяца
+  html+=`<div style="display:flex;gap:8px;margin-bottom:10px;margin-top:8px">
+    <button onclick="loadFinance(${month>1?month-1:12},${month>1?year:year-1})" style="background:var(--s2);border:1px solid var(--border);color:var(--muted);padding:7px 14px;border-radius:8px;font-family:var(--fm);font-size:12px;cursor:pointer">← Пред.</button>
+    <div style="flex:1;background:var(--s2);border:1px solid var(--accent);border-radius:8px;padding:8px;text-align:center;font-family:var(--ff);font-size:18px;color:var(--accent)">${monthNames[month]} ${year}</div>
+    <button onclick="loadFinance(${month<12?month+1:1},${month<12?year:year+1})" style="background:var(--s2);border:1px solid var(--border);color:var(--muted);padding:7px 14px;border-radius:8px;font-family:var(--fm);font-size:12px;cursor:pointer">След. →</button>
+  </div>`;
+
+  // Общий итог
+  const totalProfit = f.pnl?.total || 0;
+  const profClass = totalProfit>=0?'profit':'loss';
+  html+=`<div class="sec"><div class="sec-title">💼 ОБЩИЙ ИТОГ</div>
+  <div class="fin-grid">
+    <div class="fin-card neutral"><div class="fin-label">Выручка</div><div class="fin-val">${fmtMoney(f.revenue?.total||0)}₽</div></div>
+    <div class="fin-card loss"><div class="fin-label">Расходы</div><div class="fin-val">${fmtMoney(f.expenses?.total||0)}₽</div></div>
+    <div class="fin-card ${profClass}" style="grid-column:1/-1">
+      <div class="fin-label">Чистая прибыль</div>
+      <div class="fin-val">${totalProfit>=0?'+':''}${fmtMoney(totalProfit)}₽</div>
+      <div class="fin-sub">${totalProfit>=0?'✅ В плюсе':'⚠ В минусе'}</div>
+    </div>
+  </div></div>`;
+
+  // По точкам
+  html+=`<div class="sec"><div class="sec-title">🏠 ПО ТОЧКАМ</div><div class="fin-grid">`;
+  points.forEach(pt=>{
+    const rev = f.revenue?.[pt]||0;
+    const exp = f.expenses?.[pt]?.total||0;
+    const pnl = f.pnl?.[pt]||0;
+    const cats = f.expenses?.[pt]?.byCategory||{};
+    const pc = pnl>=0?'profit':'loss';
+    html+=`<div class="fin-card ${pc}">
+      <div class="fin-label">${pt}</div>
+      <div class="fin-val">${pnl>=0?'+':''}${fmtMoney(pnl)}₽</div>
+      <div class="fin-sub">Выручка: ${fmtMoney(rev)}₽</div>
+      <div class="fin-sub">Расходы: ${fmtMoney(exp)}₽</div>
+      ${Object.entries(cats).map(([c,a])=>`<div class="fin-sub" style="margin-top:4px">• ${c}: ${fmtMoney(a)}₽</div>`).join('')}
+    </div>`;
+  });
+  html+=`</div></div>`;
+
+  // Форма добавления расхода
+  html+=`<div class="exp-form">
+    <div class="ef-title">➕ Добавить расход</div>
+    <div class="ef-row">
+      <select class="ef-select" id="exp-point">
+        <option>Цесаревича</option><option>Татарка</option>
+      </select>
+      <select class="ef-select" id="exp-cat">
+        <option>ЗП</option><option>Аренда</option><option>Оборудование</option>
+        <option>Ремонт</option><option>Расходники</option><option>Прочее</option>
+      </select>
+    </div>
+    <div class="ef-row">
+      <input class="ef-input" type="number" id="exp-amt" placeholder="Сумма ₽">
+      <input class="ef-input" type="text" id="exp-comment" placeholder="Комментарий">
+    </div>
+    <button class="ef-btn" onclick="submitExpense()">ДОБАВИТЬ РАСХОД</button>
+  </div>`;
+
+  document.getElementById('content').innerHTML = html;
+  // Сохраняем текущий месяц для формы
+  document.getElementById('content').dataset.month = month;
+  document.getElementById('content').dataset.year = year;
+}
+
+async function submitExpense(){
+  const point   = document.getElementById('exp-point').value;
+  const cat     = document.getElementById('exp-cat').value;
+  const amount  = document.getElementById('exp-amt').value;
+  const comment = document.getElementById('exp-comment').value;
+  if(!amount){ alert('Введи сумму'); return; }
+  const now = new Date();
+  const date = String(now.getDate()).padStart(2,'0')+'.'+String(now.getMonth()+1).padStart(2,'0')+'.'+now.getFullYear();
+  try{
+    const p = new URLSearchParams({action:'addExpense',point,category:cat,amount,comment,date});
+    await fetch(SCRIPT_URL+'?'+p,{method:'GET',mode:'no-cors'});
+    const m = parseInt(document.getElementById('content').dataset.month);
+    const y = parseInt(document.getElementById('content').dataset.year);
+    showToast('Расход добавлен!');
+    setTimeout(()=>loadFinance(m,y), 1500);
+  }catch(e){ showToast('Ошибка',true); }
 }
 
 loadData();
