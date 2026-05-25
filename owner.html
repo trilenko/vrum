@@ -179,6 +179,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);min-height:100
 
 <div class="period-tabs">
   <div class="ptab on" onclick="setPeriod('today',this)">Сегодня</div>
+  <div class="ptab" onclick="setPeriod('yesterday',this)">Вчера</div>
   <div class="ptab" onclick="setPeriod('week',this)">7 дней</div>
   <div class="ptab" onclick="setPeriod('month',this)">30 дней</div>
   <div class="ptab" onclick="setPeriod('all',this)">Всё время</div>
@@ -260,11 +261,13 @@ function todayDate(){ return new Date(new Date().setHours(0,0,0,0)); }
 
 function filterByPeriod(rows){
   const today = todayDate();
+  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate()-1);
   return rows.filter(r => {
     if(!r.date) return false;
     const d = parseDate(r.date);
     if(!d) return false;
-    if(period === 'today') return d.getTime() === today.getTime();
+    if(period === 'today')     return d.getTime() === today.getTime();
+    if(period === 'yesterday') return d.getTime() === yesterday.getTime();
     if(period === 'week'){
       const w = new Date(today); w.setDate(w.getDate()-6);
       return d >= w;
@@ -285,6 +288,20 @@ function render(){
   const total = rows.reduce((s,r)=>s+(+r.amount||0), 0);
   const cnt = rows.length;
   const avg = cnt > 0 ? Math.round(total/cnt) : 0;
+
+  // По типам аттракционов
+  const byType = {
+    'Машинки': {cnt:0,rev:0,ico:'🚗'},
+    'Батут':   {cnt:0,rev:0,ico:'🤸'},
+    'Шарик':   {cnt:0,rev:0,ico:'🎯'},
+  };
+  rows.forEach(r=>{
+    const n=(r.car||'').toLowerCase();
+    const amount=+r.amount||0;
+    if(n.includes('батут'))                                              { byType['Батут'].cnt++;   byType['Батут'].rev+=amount; }
+    else if(n.includes('шарик'))                                         { byType['Шарик'].cnt++;   byType['Шарик'].rev+=amount; }
+    else if(n.includes('дрифт')||n.includes('машин')||n.includes('маш')){ byType['Машинки'].cnt++; byType['Машинки'].rev+=amount; }
+  });
 
   // По точкам
   const byPoint = {};
@@ -374,6 +391,30 @@ function render(){
       <div class="kpi-sub">${total>0?Math.round((byPay['Нал']||0)/total*100):0}% от выручки</div>
     </div>
   </div>`;
+
+  // По аттракционам — всегда показываем
+  const attrTotal = Object.values(byType).reduce((s,t)=>s+t.rev,0);
+  if(attrTotal>0){
+    html+=`<div class="sec"><div class="sec-title">🎡 ПО АТТРАКЦИОНАМ</div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">`;
+    Object.entries(byType).filter(([,t])=>t.rev>0).sort((a,b)=>b[1].rev-a[1].rev).forEach(([name,t])=>{
+      const pct=attrTotal>0?Math.round(t.rev/attrTotal*100):0;
+      const avg2=t.cnt>0?Math.round(t.rev/t.cnt):0;
+      html+=`<div style="background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:10px 12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+          <div style="font-family:var(--ff);font-size:18px">${t.ico} ${name}</div>
+          <div style="font-family:var(--fm);font-size:14px;font-weight:700;color:var(--green)">${fmtMoney(t.rev)}₽</div>
+        </div>
+        <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:4px">
+          <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:3px"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-family:var(--fm);font-size:9px;color:var(--muted)">
+          <span>${t.cnt} прокатов · ср. ${avg2}₽/прокат</span><span>${pct}%</span>
+        </div>
+      </div>`;
+    });
+    html+=`</div></div>`;
+  }
 
   // По точкам
   if(Object.keys(byPoint).length > 0){
