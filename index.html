@@ -657,6 +657,7 @@ function doStop(){
   const sd=new Date(a.ms);
   const e=mkEntry(id,a,mins,sd,false,null);
   log.unshift(e);delete active[id];saveA();saveL();
+  blockPollUntil = Date.now() + 10000;
   closeM('m-stop');
   const el=document.getElementById('vc-'+id);
   if(el){isBat(id)?applyBC(el,id):applyVC(el,id);}
@@ -858,11 +859,12 @@ const DEVICE_ID = localStorage.getItem('deviceId');
 
 let lastPollTs = 0;
 
+let blockPollUntil = 0; // блокируем poll на 10 сек после стопа
+
 async function pushActive(){
   if(!C.url) return;
   try{
     const pt=document.getElementById('ptsel')?.value||'Цесаревича';
-    // Помечаем каждый прокат ID устройства которое его запустило
     const payload={};
     Object.keys(active).forEach(id=>{
       payload[id]={...active[id], _dev: DEVICE_ID};
@@ -872,12 +874,18 @@ async function pushActive(){
       point:pt,
       data:JSON.stringify(payload)
     });
+    // Отправляем дважды с паузой для надёжности
     await fetch(C.url+'?'+p,{method:'GET',mode:'no-cors'});
+    setTimeout(async()=>{
+      try{ await fetch(C.url+'?'+p,{method:'GET',mode:'no-cors'}); }catch(e){}
+    }, 2000);
   }catch(e){}
 }
 
 async function pollActive(){
   if(!C.url) return;
+  // Блокируем poll на 10 сек после остановки проката
+  if(Date.now() < blockPollUntil) return;
   try{
     const pt=document.getElementById('ptsel')?.value||'Цесаревича';
     const p=new URLSearchParams({action:'getActive',point:pt});
@@ -895,7 +903,7 @@ async function pollActive(){
         }
       });
 
-      // Удаляем только ЧУЖИЕ прокаты если их нет в удалённом — свои не трогаем
+      // Удаляем только ЧУЖИЕ прокаты если их нет в удалённом
       Object.keys(active).forEach(id=>{
         const a=active[id];
         if(a._dev && a._dev !== DEVICE_ID && !remote[id]){
