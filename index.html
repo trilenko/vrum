@@ -107,7 +107,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);display:flex;f
 .lpay{font-family:var(--fm);font-size:9px;text-align:right;margin-top:2px}
 .empty{text-align:center;padding:40px 20px;color:var(--muted);font-family:var(--fm);font-size:12px;line-height:2}
 
-.sal-box{background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px;margin-top:8px}
+.shift-bar{background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:10px 14px;margin:8px 0;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.shift-status{font-family:var(--fm);font-size:11px;color:var(--muted)}
+.shift-status b{display:block;font-family:var(--ff);font-size:16px;color:var(--text);letter-spacing:1px}
+.shift-status.active b{color:var(--green)}
+.btn-shift-open{background:var(--green);color:#000;border:none;padding:10px 16px;border-radius:8px;font-family:var(--ff);font-size:16px;letter-spacing:1px;cursor:pointer;flex-shrink:0}
+.btn-shift-close{background:var(--red);color:#fff;border:none;padding:10px 16px;border-radius:8px;font-family:var(--ff);font-size:16px;letter-spacing:1px;cursor:pointer;flex-shrink:0}
+.btn-shift-open:active,.btn-shift-close:active{opacity:.8}
 .sal-title{font-family:var(--ff);font-size:18px;color:var(--accent);margin-bottom:10px}
 .sal-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-family:var(--fm);font-size:12px;color:var(--muted)}
 .sal-row:last-child{border:none}
@@ -241,6 +247,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);display:flex;f
   <div class="shift">
     <select id="ptsel" onchange="onPtChange()"><option>Цесаревича</option><option>Татарка</option></select>
   </div>
+  <div id="shift-bar-wrap"></div>
   <div class="syncbar">
     <div class="sinfo"><div class="sdot" id="sdot2"></div><span id="stext">Синхронизация не настроена</span></div>
     <button class="cfg-btn" onclick="openCfg()">⚙ Настройки</button>
@@ -426,6 +433,7 @@ function checkPin(){
     document.getElementById('cop-name').textContent = '👤 ' + currentOp;
     pinInput = ''; pinTarget = null;
     init();
+    renderShiftBar();
   } else {
     document.getElementById('pin-err').textContent = 'Неверный PIN, попробуй ещё раз';
     pinInput = '';
@@ -459,9 +467,11 @@ const DUR={drift:900,car:900,bat:1200};
 let pid=null,retR=null;
 
 function init(){
-  buildGrids();renderSh();renderLog();renderSal();syncUI();
+  buildGrids();renderSh();renderLog();renderSal();renderShiftBar();syncUI();
   setInterval(tick,1000);setInterval(alerts,4000);
   setInterval(pollActive,5000);
+  // Обновляем счётчик часов каждую минуту
+  setInterval(()=>{ renderShiftBar(); renderSal(); }, 60000);
 }
 
 // Точка входа — запускается при загрузке страницы
@@ -761,28 +771,133 @@ function updStats(){
   document.getElementById('st-b').textContent=total-nal;
 }
 
+// ── СМЕНА ───────────────────────────────────────────────
+let shiftData = JSON.parse(localStorage.getItem('shiftData4')||'{}');
+// shiftData = { op: { startTs, endTs } }
+
+function saveShift(){ localStorage.setItem('shiftData4', JSON.stringify(shiftData)); }
+
+function getShift(op){
+  return shiftData[op] || {startTs:null, endTs:null};
+}
+
+function openShift(){
+  const op = getCurrentOp();
+  if(!op) return;
+  const sh = getShift(op);
+  if(sh.startTs && !sh.endTs){
+    showToast('Смена уже открыта!'); return;
+  }
+  shiftData[op] = {startTs: Date.now(), endTs: null};
+  saveShift();
+  renderShiftBar();
+  renderSal();
+  showToast('✅ Смена открыта — ' + new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}));
+}
+
+function closeShift(){
+  const op = getCurrentOp();
+  if(!op) return;
+  const sh = getShift(op);
+  if(!sh.startTs){ showToast('Сначала открой смену!'); return; }
+  if(sh.endTs){ showToast('Смена уже закрыта!'); return; }
+  if(!confirm('Закрыть смену? Это зафиксирует время окончания.')) return;
+  shiftData[op] = {...sh, endTs: Date.now()};
+  saveShift();
+  renderShiftBar();
+  renderSal();
+  showToast('🏁 Смена закрыта — ' + new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}));
+}
+
+function fmtTime(ts){
+  if(!ts) return '—';
+  return new Date(ts).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+}
+
+function shiftHours(op){
+  const sh = getShift(op);
+  if(!sh.startTs) return 0;
+  const end = sh.endTs || Date.now();
+  return Math.round((end - sh.startTs) / 3600000 * 10) / 10;
+}
+
+function renderShiftBar(){
+  const op = getCurrentOp();
+  if(!op){ document.getElementById('shift-bar-wrap').innerHTML=''; return; }
+  const sh = getShift(op);
+  const wrap = document.getElementById('shift-bar-wrap');
+  if(!sh.startTs){
+    // Смена не открыта
+    wrap.innerHTML=`<div class="shift-bar">
+      <div class="shift-status">
+        <b>⏸ Смена не открыта</b>
+        <span>Нажми кнопку при выходе на точку</span>
+      </div>
+      <button class="btn-shift-open" onclick="openShift()">▶ НАЧАТЬ СМЕНУ</button>
+    </div>`;
+  } else if(!sh.endTs){
+    // Смена идёт
+    const hrs = shiftHours(op);
+    wrap.innerHTML=`<div class="shift-bar">
+      <div class="shift-status active">
+        <b>🟢 СМЕНА ИДЁТ</b>
+        <span>С ${fmtTime(sh.startTs)} · ${hrs}ч</span>
+      </div>
+      <button class="btn-shift-close" onclick="closeShift()">⏹ ЗАКРЫТЬ</button>
+    </div>`;
+  } else {
+    // Смена закрыта
+    const hrs = shiftHours(op);
+    wrap.innerHTML=`<div class="shift-bar">
+      <div class="shift-status">
+        <b>🏁 Смена закрыта</b>
+        <span>${fmtTime(sh.startTs)} — ${fmtTime(sh.endTs)} · ${hrs}ч</span>
+      </div>
+      <button class="btn-shift-open" onclick="openShift()" style="background:var(--accent);color:#000">▶ НОВАЯ СМЕНА</button>
+    </div>`;
+  }
+}
+
 function renderSal(){
   const rate=+C.r||200;
   const op=getCurrentOp();
   const my=log.filter(e=>e.op===op&&!e.ret);
   const rev=my.reduce((s,e)=>s+e.amount,0);
-  const times=my.map(e=>e.id).sort((a,b)=>a-b);
-  const hrs=times.length>=2?Math.max(1,Math.round((times[times.length-1]-times[0])/3600000)):0;
-  const oklad=rate*Math.max(hrs,1);
   const pct=Math.round(rev*0.1);
-  const bn=my.length>0?Math.round(my.filter(e=>e.pay!=='Нал').length/my.length*100):0;
-  const bonus=bn>=85?600:bn>=70?300:0;
-  const total=Math.max(oklad+pct+bonus,1500);
+
+  // Часы — по смене если открыта, иначе по прокатам
+  const sh = getShift(op);
+  let hrs = 0;
+  let hrsNote = '';
+  if(sh.startTs){
+    hrs = shiftHours(op);
+    hrsNote = `${fmtTime(sh.startTs)} — ${sh.endTs?fmtTime(sh.endTs):'сейчас'}`;
+  } else {
+    // Фолбэк — по времени прокатов
+    const times=my.map(e=>e.id).sort((a,b)=>a-b);
+    hrs = times.length>=2 ? Math.max(1, Math.round((times[times.length-1]-times[0])/3600000)) : 0;
+    hrsNote = 'по прокатам (открой смену для точного учёта)';
+  }
+
+  const oklad = Math.max(rate * hrs, 2000);
+  const total = Math.max(oklad + pct, 2000);
+
+  const shiftStatus = !sh.startTs
+    ? `<div class="sal-row" style="background:#1a0a00;border-radius:6px;padding:8px 10px;margin-bottom:6px">
+        <span style="color:var(--orange)">⚠ Смена не открыта — нажми «Начать смену» для точного учёта часов</span>
+       </div>`
+    : '';
+
   document.getElementById('salbox').innerHTML=`
+    ${shiftStatus}
     <div class="sal-title">💰 ${op} — итог смены</div>
-    <div class="sal-row"><span>Прокатов (по таймеру)</span><b>${my.length} шт</b></div>
+    <div class="sal-row"><span>Прокатов</span><b>${my.length} шт</b></div>
     <div class="sal-row"><span>Выручка зоны</span><b>${rev}₽</b></div>
-    <div class="sal-row"><span>Часов в смене (~)</span><b>${hrs}ч</b></div>
-    <div class="sal-row"><span>${rate}₽/ч × ${hrs}ч</span><b>${oklad}₽</b></div>
+    <div class="sal-row"><span>Часов в смене</span><b>${hrs}ч</b></div>
+    <div class="sal-row"><span style="font-size:9px;color:var(--muted)">${hrsNote}</span><span></span></div>
+    <div class="sal-row"><span>${rate}₽/ч × ${hrs}ч (мин. 2 000₽)</span><b>${oklad}₽</b></div>
     <div class="sal-row"><span>10% от выручки</span><b>${pct}₽</b></div>
-    <div class="sal-row"><span>Бонус безнал (${bn}%)</span><b style="color:${bonus?'var(--green)':'var(--muted)'}">${bonus?'+'+bonus:'—'}₽</b></div>
-    <div class="sal-row" style="font-size:10px"><span>Мин. гарантия 1 500₽</span><span></span></div>
-    <div class="sal-total"><span>К ВЫПЛАТЕ</span><b>${total}₽</b></div>`;
+    <div class="sal-total"><span>К ВЫПЛАТЕ ЗА СМЕНУ</span><b>${total}₽</b></div>`;
 }
 
 // Ключи уже отправленных записей — защита от дублей на стороне клиента
