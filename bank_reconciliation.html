@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ВРУМ — Сверка банка</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#080808;--s1:#111;--s2:#181818;--s3:#222;--border:#2a2a2a;
+  --accent:#FFD600;--green:#00E676;--red:#FF1744;--blue:#2979FF;
+  --orange:#FF6D00;--text:#F0F0F0;--muted:#555;
+  --ff:'Bebas Neue',sans-serif;--fm:'JetBrains Mono',monospace;--fb:'Manrope',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--fb);min-height:100vh;padding-bottom:40px}
+
+.hdr{background:var(--s1);border-bottom:2px solid var(--accent);padding:12px 16px;display:flex;align-items:center;justify-content:space-between}
+.logo{font-family:var(--ff);font-size:22px;letter-spacing:3px;color:var(--accent)}
+.clock{font-family:var(--fm);font-size:12px;color:var(--muted)}
+
+.content{padding:12px}
+
+/* UPLOAD ZONE */
+.upload-zone{background:var(--s2);border:2px dashed var(--border);border-radius:14px;padding:28px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:12px}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--accent);background:#1a1500}
+.upload-zone input{display:none}
+.uz-ico{font-size:36px;margin-bottom:8px}
+.uz-title{font-family:var(--ff);font-size:20px;letter-spacing:1px;color:var(--accent);margin-bottom:4px}
+.uz-sub{font-family:var(--fm);font-size:11px;color:var(--muted)}
+.uz-btn{display:inline-block;background:var(--accent);color:#000;font-family:var(--ff);font-size:16px;letter-spacing:1px;padding:8px 20px;border-radius:20px;margin-top:10px;cursor:pointer}
+
+/* SETTINGS */
+.settings-box{background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px}
+.sb-title{font-family:var(--ff);font-size:16px;letter-spacing:1px;color:var(--accent);margin-bottom:10px}
+.sb-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sb-field label{font-family:var(--fm);font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;display:block;margin-bottom:4px}
+.sb-field input{background:var(--s3);border:1px solid var(--border);color:var(--text);padding:9px 10px;border-radius:8px;font-family:var(--fm);font-size:13px;width:100%;outline:none}
+.sb-field input:focus{border-color:var(--accent)}
+
+/* STATS */
+.stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px}
+.stat-card{background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:12px}
+.stat-card.ok{border-color:var(--green);background:#0a1a0a}
+.stat-card.warn{border-color:var(--red);background:#1a0505}
+.stat-card.info{border-color:var(--accent);background:#1a1500}
+.sc-label{font-family:var(--fm);font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:4px}
+.sc-val{font-family:var(--ff);font-size:26px;line-height:1}
+.stat-card.ok .sc-val{color:var(--green)}
+.stat-card.warn .sc-val{color:var(--red)}
+.stat-card.info .sc-val{color:var(--accent)}
+.sc-sub{font-family:var(--fm);font-size:9px;color:var(--muted);margin-top:3px}
+
+/* TABLE */
+.table-wrap{background:var(--s2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:12px}
+.tw-title{background:var(--s3);padding:10px 14px;font-family:var(--ff);font-size:16px;letter-spacing:1px;color:var(--accent)}
+.t-row{display:grid;padding:10px 14px;border-bottom:1px solid var(--border);align-items:center;gap:6px}
+.t-row:last-child{border-bottom:none}
+.t-row.hdr{background:#111;font-family:var(--fm);font-size:9px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+.t-row.ok{border-left:3px solid var(--green)}
+.t-row.warn{border-left:3px solid var(--red)}
+.t-row.missing{border-left:3px solid var(--orange);background:#0a0800}
+.t-date{font-family:var(--fm);font-size:11px}
+.t-amt{font-family:var(--fm);font-size:12px;font-weight:700;text-align:right}
+.t-diff{font-family:var(--fm);font-size:12px;font-weight:700;text-align:right}
+.t-status{font-family:var(--fm);font-size:10px;text-align:center}
+.ok-color{color:var(--green)} .warn-color{color:var(--red)} .miss-color{color:var(--orange)}
+
+/* DETAIL */
+.detail-box{background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px}
+.db-title{font-family:var(--ff);font-size:16px;color:var(--accent);margin-bottom:10px}
+.detail-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-family:var(--fm);font-size:11px}
+.detail-row:last-child{border-bottom:none}
+.dr-desc{color:var(--muted);flex:1;padding-right:8px;font-size:10px}
+.dr-amt{color:var(--green);font-weight:700;white-space:nowrap}
+
+.empty{text-align:center;padding:40px;color:var(--muted);font-family:var(--fm);font-size:12px;line-height:2}
+
+.commission-note{background:#0a1530;border:1px solid var(--blue);border-radius:8px;padding:10px 12px;font-family:var(--fm);font-size:10px;color:var(--blue);margin-bottom:12px;line-height:1.7}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="logo">⚡ СВЕРКА БАНКА</div>
+  <div class="clock" id="clock"></div>
+</div>
+
+<div class="content">
+
+  <!-- Настройки -->
+  <div class="settings-box">
+    <div class="sb-title">⚙ Настройки</div>
+    <div class="sb-row">
+      <div class="sb-field">
+        <label>Комиссия банка (% с НДС)</label>
+        <input type="number" id="commission" value="2.43" step="0.01" min="0" max="5">
+      </div>
+      <div class="sb-field">
+        <label>Apps Script URL</label>
+        <input type="text" id="scriptUrl" value="https://script.google.com/macros/s/AKfycbzlHHpG-ykRcW_74RGV42Hyk3Ou0YSTbK1Vsr-O5NX5SyUgigOl7doMrheQPBkUzFLY/exec" placeholder="https://script.google.com/...">
+      </div>
+    </div>
+  </div>
+
+  <!-- Загрузка выписки -->
+  <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()"
+       ondragover="event.preventDefault();this.classList.add('drag')"
+       ondragleave="this.classList.remove('drag')"
+       ondrop="handleDrop(event)">
+    <input type="file" id="fileInput" accept=".xlsx,.xls" onchange="handleFile(event)">
+    <div class="uz-ico">🏦</div>
+    <div class="uz-title">Загрузить выписку Альфа-банка</div>
+    <div class="uz-sub">Скачай выписку в Excel из Альфа-Бизнес онлайн<br>и перетащи сюда или нажми кнопку</div>
+    <div class="uz-btn">Выбрать файл .xlsx</div>
+  </div>
+
+  <div class="commission-note">
+    💡 <b>Твой тариф Альфа-банк:</b> 1.99% комиссия + НДС 22% на комиссию = итого <b>2.43%</b> с каждого платежа.<br>
+    Пример: клиент заплатил 1 000₽ → комиссия 19.9₽ + НДС 4.38₽ = удержано 24.28₽ → на счёт придёт <b>975.72₽</b>.<br>
+    СБП платежи приходят в тот же день. Эквайринг (терминал) — на следующий рабочий день.
+  </div>
+
+  <div id="results"></div>
+</div>
+
+<script>
+const SCRIPT_URL = () => document.getElementById('scriptUrl').value.trim();
+const COMMISSION = () => parseFloat(document.getElementById('commission').value) / 100;
+
+// Clock
+setInterval(()=>{
+  const n=new Date();
+  document.getElementById('clock').textContent=n.toLocaleDateString('ru-RU')+' '+n.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+},1000);
+
+function handleDrop(e){
+  e.preventDefault();
+  document.getElementById('dropZone').classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if(file) processFile(file);
+}
+
+function handleFile(e){
+  const file = e.target.files[0];
+  if(file) processFile(file);
+}
+
+function processFile(file){
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const data = new Uint8Array(e.target.result);
+    const wb = XLSX.read(data, {type:'array'});
+    const bankData = parseBank(wb);
+    const appData = await fetchAppData();
+    renderResults(bankData, appData, file.name);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// Парсим выписку Альфа-банка
+function parseBank(wb){
+  const result = {
+    sbp: {},       // QR-платежи: дата → сумма
+    acquiring: {}, // Эквайринг: дата → сумма
+    raw: [],
+    period: '',
+    account: '',
+    totalCredit: 0
+  };
+
+  wb.SheetNames.forEach(sheetName => {
+    const ws = wb.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null});
+
+    // Ищем период и счёт
+    rows.slice(0,10).forEach(row => {
+      if(row[0]==='За период' && row[1]) result.period = row[1];
+      if(row[0]==='Выписка по счёту' && row[1]) result.account = row[1];
+    });
+
+    // Ищем данные (строки с датой в первой колонке)
+    rows.forEach((row,i) => {
+      if(i < 12) return; // пропускаем заголовки
+      const dateVal = row[0];
+      const credit = row[3];
+      const desc = String(row[10]||'');
+
+      if(!dateVal || !credit || typeof credit !== 'number' || credit <= 0) return;
+
+      // Парсим дату
+      let dateStr = '';
+      if(typeof dateVal === 'string' && dateVal.includes('.')) {
+        dateStr = dateVal.trim();
+      } else if(typeof dateVal === 'number') {
+        // Excel serial date
+        const d = XLSX.SSF.parse_date_code(dateVal);
+        dateStr = String(d.d).padStart(2,'0')+'.'+String(d.m).padStart(2,'0')+'.'+d.y;
+      } else if(dateVal instanceof Date) {
+        dateStr = String(dateVal.getDate()).padStart(2,'0')+'.'+String(dateVal.getMonth()+1).padStart(2,'0')+'.'+dateVal.getFullYear();
+      }
+
+      if(!dateStr) return;
+
+      result.raw.push({date:dateStr, amount:credit, desc});
+      result.totalCredit += credit;
+
+      // Разделяем СБП и эквайринг
+      if(desc.startsWith('C3') || desc.includes('Возм. по согл. в СБП')) {
+        // СБП — приходит в тот же день
+        result.sbp[dateStr] = (result.sbp[dateStr]||0) + credit;
+      } else if(desc.includes('ИП ТРИЛЕНКО') || desc.includes('Возм ')) {
+        // Эквайринг — крупная сумма, приходит на следующий день
+        result.acquiring[dateStr] = (result.acquiring[dateStr]||0) + credit;
+      }
+    });
+  });
+
+  return result;
+}
+
+// Загружаем данные из приложения
+async function fetchAppData(){
+  const url = SCRIPT_URL();
+  if(!url) return null;
+  try{
+    const res = await fetch(url+'?action=getData');
+    const json = await res.json();
+    if(!json.rows) return null;
+
+    // Группируем безнал по дням
+    const byDate = {};
+    json.rows.forEach(r => {
+      if(r.isReturn || r.pay === 'Нал') return;
+      const date = r.date;
+      if(!date) return;
+      if(!byDate[date]) byDate[date] = {qr:0, on:0, total:0, cnt:0};
+      const amt = +r.amount||0;
+      byDate[date].total += amt;
+      byDate[date].cnt++;
+      if(r.pay==='QR') byDate[date].qr += amt;
+      if(r.pay==='ОН') byDate[date].on += amt;
+    });
+    return byDate;
+  }catch(e){
+    return null;
+  }
+}
+
+// Добавляем день к дате
+function addDays(dateStr, days){
+  const p = dateStr.split('.');
+  const d = new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+  d.setDate(d.getDate() + days);
+  return String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+d.getFullYear();
+}
+
+function fmtMoney(n){
+  n=+n||0;
+  if(n>=1000000) return (n/1000000).toFixed(1)+'М';
+  if(n>=1000) return Math.round(n/1000)+'к';
+  return Math.round(n)+'';
+}
+
+function renderResults(bank, app, filename){
+  const comm = COMMISSION();
+  let html = '';
+
+  // Заголовок файла
+  html += `<div style="background:var(--s2);border:1px solid var(--accent);border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px">
+    <div style="font-size:20px">📄</div>
+    <div>
+      <div style="font-family:var(--ff);font-size:16px;color:var(--accent)">${filename}</div>
+      <div style="font-family:var(--fm);font-size:10px;color:var(--muted)">${bank.period} · Счёт: ${bank.account}</div>
+    </div>
+    <div style="margin-left:auto;font-family:var(--ff);font-size:20px;color:var(--green)">${fmtMoney(bank.totalCredit)}₽</div>
+  </div>`;
+
+  // Общая статистика
+  const totalSbp = Object.values(bank.sbp).reduce((s,v)=>s+v,0);
+  const totalAcq = Object.values(bank.acquiring).reduce((s,v)=>s+v,0);
+  html += `<div class="stats-grid">
+    <div class="stat-card info">
+      <div class="sc-label">СБП (QR) пришло</div>
+      <div class="sc-val">${fmtMoney(totalSbp)}₽</div>
+      <div class="sc-sub">Приходит в тот же день</div>
+    </div>
+    <div class="stat-card info">
+      <div class="sc-label">Эквайринг пришло</div>
+      <div class="sc-val">${fmtMoney(totalAcq)}₽</div>
+      <div class="sc-sub">Приходит на след. день −${(comm*100).toFixed(1)}%</div>
+    </div>
+  </div>`;
+
+  // ══ СВЕРКА СБП ══
+  html += `<div class="table-wrap">
+    <div class="tw-title">📱 СБП (QR-платежи) — приходят в тот же день</div>
+    <div class="t-row hdr" style="grid-template-columns:80px 1fr 1fr 1fr 60px">
+      <div>Дата</div><div>Приложение</div><div>Банк получил</div><div>Разница</div><div>Статус</div>
+    </div>`;
+
+  // Собираем все даты
+  const allDates = new Set([...Object.keys(bank.sbp), ...(app?Object.keys(app):[])]);
+  let totalDiffSbp = 0;
+  let warnCount = 0;
+
+  [...allDates].sort().forEach(date => {
+    const bankAmt = bank.sbp[date]||0;
+    const appAmt = app?((app[date]?.qr||0)):0;
+    if(!bankAmt && !appAmt) return;
+    const diff = bankAmt - appAmt;
+    totalDiffSbp += diff;
+    const isOk = Math.abs(diff) < 50;
+    if(!isOk && (bankAmt||appAmt)) warnCount++;
+    const cls = isOk?'ok':bankAmt===0?'missing':'warn';
+    const diffColor = diff>=0?'ok-color':'warn-color';
+    html+=`<div class="t-row ${cls}" style="grid-template-columns:80px 1fr 1fr 1fr 60px">
+      <div class="t-date">${date.slice(0,5)}</div>
+      <div class="t-amt" style="color:var(--blue)">${appAmt?fmtMoney(appAmt)+'₽':'—'}</div>
+      <div class="t-amt" style="color:var(--green)">${bankAmt?fmtMoney(bankAmt)+'₽':'—'}</div>
+      <div class="t-diff ${diffColor}">${diff>=0?'+':''}${fmtMoney(diff)}₽</div>
+      <div class="t-status">${isOk?'✅':bankAmt===0?'⏳':'⚠️'}</div>
+    </div>`;
+  });
+  html+=`</div>`;
+
+  // ══ СВЕРКА ЭКВАЙРИНГА ══
+  html += `<div class="table-wrap">
+    <div class="tw-title">💳 Эквайринг (терминал) — приходит на следующий день −${(comm*100).toFixed(1)}%</div>
+    <div class="t-row hdr" style="grid-template-columns:80px 80px 1fr 1fr 1fr 50px">
+      <div>Дата опл.</div><div>Дата прих.</div><div>Приложение</div><div>Ожидалось</div><div>Пришло</div><div>✓</div>
+    </div>`;
+
+  if(app){
+    [...Object.keys(app)].sort().forEach(appDate => {
+      const appOnAmt = app[appDate]?.on||0;
+      if(!appOnAmt) return;
+      const expectedDate = addDays(appDate, 1);
+      const bankAmt = bank.acquiring[expectedDate]||0;
+      const expectedAmt = appOnAmt * (1-comm);
+      const diff = bankAmt - expectedAmt;
+      const isOk = bankAmt > 0 && Math.abs(diff) < appOnAmt * 0.05; // допуск 5%
+      const cls = bankAmt===0?'missing':isOk?'ok':'warn';
+      html+=`<div class="t-row ${cls}" style="grid-template-columns:80px 80px 1fr 1fr 1fr 50px">
+        <div class="t-date">${appDate.slice(0,5)}</div>
+        <div class="t-date" style="color:var(--muted)">${expectedDate.slice(0,5)}</div>
+        <div class="t-amt" style="color:var(--blue)">${fmtMoney(appOnAmt)}₽</div>
+        <div class="t-amt" style="color:var(--muted)">${fmtMoney(expectedAmt)}₽</div>
+        <div class="t-amt" style="color:${bankAmt?'var(--green)':'var(--muted)'}">${bankAmt?fmtMoney(bankAmt)+'₽':'⏳ нет'}</div>
+        <div class="t-status">${bankAmt===0?'⏳':isOk?'✅':'⚠️'}</div>
+      </div>`;
+    });
+  } else {
+    // Только банк без приложения
+    Object.entries(bank.acquiring).sort().forEach(([date,amt])=>{
+      html+=`<div class="t-row ok" style="grid-template-columns:80px 80px 1fr 1fr 1fr 50px">
+        <div class="t-date">—</div>
+        <div class="t-date">${date.slice(0,5)}</div>
+        <div class="t-amt" style="color:var(--muted)">—</div>
+        <div class="t-amt" style="color:var(--muted)">—</div>
+        <div class="t-amt" style="color:var(--green)">${fmtMoney(amt)}₽</div>
+        <div class="t-status">📄</div>
+      </div>`;
+    });
+    html+=`<div style="padding:10px 14px;font-family:var(--fm);font-size:10px;color:var(--orange)">⚠ Данные приложения не загружены — укажи URL Apps Script в настройках</div>`;
+  }
+  html+=`</div>`;
+
+  // ══ ВСЕ ТРАНЗАКЦИИ ══
+  html += `<div class="detail-box">
+    <div class="db-title">📋 Все транзакции из банка (${bank.raw.length})</div>`;
+  bank.raw.forEach(t => {
+    const type = t.desc.startsWith('C3')||t.desc.includes('СБП') ? '📱 СБП' : '💳 Эквайр';
+    html+=`<div class="detail-row">
+      <div style="font-family:var(--fm);font-size:10px;color:var(--accent);width:45px;flex-shrink:0">${t.date.slice(0,5)}</div>
+      <div class="dr-desc">${type} · ${t.desc.slice(0,55)}</div>
+      <div class="dr-amt">${fmtMoney(t.amount)}₽</div>
+    </div>`;
+  });
+  html+=`</div>`;
+
+  document.getElementById('results').innerHTML = html;
+}
+</script>
+</body>
+</html>
