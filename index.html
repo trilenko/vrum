@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>ВРУМ ⚡</title>
+<title>ТУРБО ⚡</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;600;700&family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -188,14 +188,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);display:flex;f
 
 <!-- ЭКРАН ВЫБОРА ОПЕРАТОРА -->
 <div class="login-screen" id="login-screen">
-  <div class="login-logo">⚡ ВРУМ</div>
+  <div class="login-logo">⚡ ТУРБО</div>
   <div class="login-sub">Выбери своё имя</div>
   <div class="op-grid" id="op-grid"></div>
 </div>
 
 <!-- ЭКРАН PIN -->
 <div class="pin-screen hide" id="pin-screen">
-  <div class="login-logo" style="font-size:32px">⚡ ВРУМ</div>
+  <div class="login-logo" style="font-size:32px">⚡ ТУРБО</div>
   <div class="pin-name" id="pin-name"></div>
   <div class="pin-hint">Введи PIN-код</div>
   <div class="pin-dots">
@@ -223,7 +223,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);display:flex;f
 </div>
 
 <div class="hdr">
-  <div class="logo">⚡ ВРУМ</div>
+  <div class="logo">⚡ ТУРБО</div>
   <div style="display:flex;align-items:center;gap:10px">
     <div class="clock" id="clock"></div>
     <div class="sdot" id="sdot-hdr" style="cursor:pointer" onclick="openCfg()"></div>
@@ -516,7 +516,7 @@ function isBat(id){ return idType(id)==='bat'; }
 const VEHICLES = {
   'Цесаревича': {
     drifts: [6, 53, 56, 18, 46, 41, 57],
-    cars:   [47, 11, 42, 59, 15, 45, 19, 1, 49, 16, 58, 8, 7, 39, 38],
+    cars:   [47, 11, 42, 59, 15, 45, 19, 1, 49, 16, 58, 8, 7, 39, 38, 52, 32],
     bats:   20,
   },
   'Татарка': {
@@ -742,11 +742,14 @@ function alerts(){
 function renderLog(){
   const list=document.getElementById('loglist');
   updStats();
-  if(!log.length){list.innerHTML='<div class="empty">Прокатов ещё нет</div>';return;}
+  const op = getCurrentOp();
+  // Показываем только прокаты текущего оператора
+  const myLog = op ? log.filter(e => e.op === op) : log;
+  if(!myLog.length){list.innerHTML='<div class="empty">Прокатов ещё нет</div>';return;}
   list.innerHTML='';
   const wrap=document.getElementById('loglist');
   wrap.className='log-wrap';
-  log.forEach(e=>{
+  myLog.forEach(e=>{
     const div=document.createElement('div');
     const sc=e.synced?'synced':e.syncErr?'serr':e.ret?'ret':'';
     div.className=`le ${sc}`;
@@ -804,9 +807,32 @@ function closeShift(){
   if(!confirm('Закрыть смену? Это зафиксирует время окончания.')) return;
   shiftData[op] = {...sh, endTs: Date.now()};
   saveShift();
+
+  // Синхронизируем закрытие смены с таблицей
+  syncShiftClose(op, shiftData[op]);
+
   renderShiftBar();
   renderSal();
   showToast('🏁 Смена закрыта — ' + new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}));
+}
+
+async function syncShiftClose(op, sh){
+  if(!C.url) return;
+  try{
+    const hrs = Math.round((sh.endTs - sh.startTs)/3600000*10)/10;
+    const p = new URLSearchParams({
+      action:'addRow',
+      date: new Date(sh.startTs).toLocaleDateString('ru-RU'),
+      num:'', car:'🏁 ЗАКРЫТИЕ СМЕНЫ',
+      startTime: new Date(sh.startTs).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),
+      endTime: new Date(sh.endTs).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),
+      duration: Math.round((sh.endTs-sh.startTs)/60000),
+      amount:0, pay:'—', operator:op,
+      point: document.getElementById('ptsel')?.value||'Цесаревича',
+      isReturn:'0', returnReason:`Смена ${hrs}ч`
+    });
+    await fetch(C.url+'?'+p,{method:'GET',mode:'no-cors'});
+  }catch(e){}
 }
 
 function fmtTime(ts){
