@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>ТУРБО — Владелец</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;600;700&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -185,6 +186,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);min-height:100
   <div class="ptab" onclick="setPeriod('month',this)">30 дней</div>
   <div class="ptab" onclick="setPeriod('all',this)">Всё время</div>
   <div class="ptab" onclick="showCustom(this)">📅 Период</div>
+  <div class="ptab" onclick="showSalary(this)">🧮 Зарплата</div>
+  <div class="ptab" onclick="showBank(this)">🏦 Сверка банка</div>
   <div class="ptab" onclick="showFinance(this)">💰 Финансы</div>
 </div>
 
@@ -355,10 +358,11 @@ function render(){
     byPoint[r.point].cnt++; byPoint[r.point].rev+=(+r.amount||0);
   });
 
-  // По операторам
+  // По операторам (исключаем строки закрытия смены)
   const byOp = {};
   rows.forEach(r=>{
     if(!r.operator) return;
+    if(String(r.car||'').includes('ЗАКРЫТИЕ')) return;
     if(!byOp[r.operator]) byOp[r.operator]={cnt:0,rev:0};
     byOp[r.operator].cnt++; byOp[r.operator].rev+=(+r.amount||0);
   });
@@ -644,11 +648,340 @@ function fmtMoney(n){
   return String(n);
 }
 
+// ══════════ СВЕРКА БАНКА ══════════
+let bankCommission = 2.43;
+
+function showBank(el){
+  document.querySelectorAll('.ptab').forEach(t=>t.classList.remove('on'));
+  el.classList.add('on');
+  document.getElementById('custom-range').style.display = 'none';
+  document.getElementById('content').innerHTML = `
+    <div style="padding:12px">
+      <div class="sec-title" style="margin-bottom:10px">🏦 СВЕРКА С БАНКОМ</div>
+      <div id="bank-drop" ondragover="event.preventDefault();this.style.borderColor='var(--accent)'" ondragleave="this.style.borderColor='var(--border)'" ondrop="bankDrop(event)"
+        style="border:2px dashed var(--border);border-radius:14px;padding:30px 16px;text-align:center;cursor:pointer;background:var(--s2)"
+        onclick="document.getElementById('bank-file').click()">
+        <div style="font-size:36px;margin-bottom:8px">📄</div>
+        <div style="font-family:var(--ff);font-size:18px;letter-spacing:1px;color:var(--accent)">Загрузи выписку Альфа-банка</div>
+        <div style="font-family:var(--fm);font-size:11px;color:var(--muted);margin-top:6px">Перетащи .xlsx сюда или нажми. Период любой — система сверит с приложением сама.</div>
+        <input type="file" id="bank-file" accept=".xlsx,.xls" style="display:none" onchange="bankFile(event)">
+      </div>
+      <div style="background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-top:10px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;color:var(--text)">Комиссия эквайринга, %</span>
+        <input type="number" id="bank-comm" value="${bankCommission}" step="0.01" style="width:70px;background:var(--s3);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-family:var(--fm);font-size:12px">
+        <span style="font-family:var(--fm);font-size:9px;color:var(--muted)">Альфа: 1.99% + НДС 22% = 2.43%</span>
+      </div>
+      <div style="font-family:var(--fm);font-size:10px;color:var(--muted);margin-top:10px;line-height:1.7">
+        💡 СБП (QR) приходит в тот же день — должно совпадать почти точно.<br>
+        Эквайринг (терминал) приходит на следующий день минус комиссия.<br>
+        ✅ совпало · ⚠️ расхождение · ⏳ ещё не пришло
+      </div>
+      <div id="bank-results" style="margin-top:14px"></div>
+    </div>`;
+}
+
+function bankDrop(e){
+  e.preventDefault();
+  document.getElementById('bank-drop').style.borderColor='var(--border)';
+  const f = e.dataTransfer.files[0];
+  if(f) bankProcess(f);
+}
+function bankFile(e){ const f=e.target.files[0]; if(f) bankProcess(f); }
+
+function bankProcess(file){
+  bankCommission = parseFloat(document.getElementById('bank-comm').value)||2.43;
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    try{
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, {type:'array'});
+      const bank = bankParse(wb);
+      const app = bankAppData();
+      bankRender(bank, app, file.name);
+    }catch(err){
+      document.getElementById('bank-results').innerHTML = `<div style="padding:14px;color:var(--red);font-size:12px">Ошибка чтения файла: ${err.message}</div>`;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function bankParse(wb){
+  const result = {sbp:{}, acquiring:{}, raw:[], period:'', account:'', totalCredit:0};
+  wb.SheetNames.forEach(sheetName=>{
+    const ws = wb.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null});
+    rows.slice(0,10).forEach(row=>{
+      if(row[0]==='За период' && row[1]) result.period = row[1];
+      if(row[0]==='Выписка по счёту' && row[1]) result.account = row[1];
+    });
+    rows.forEach((row,i)=>{
+      if(i<12) return;
+      const dateVal=row[0], credit=row[3], desc=String(row[10]||'');
+      if(!dateVal || !credit || typeof credit!=='number' || credit<=0) return;
+      let dateStr='';
+      if(typeof dateVal==='string' && dateVal.includes('.')) dateStr=dateVal.trim();
+      else if(typeof dateVal==='number'){ const d=XLSX.SSF.parse_date_code(dateVal); dateStr=String(d.d).padStart(2,'0')+'.'+String(d.m).padStart(2,'0')+'.'+d.y; }
+      else if(dateVal instanceof Date) dateStr=String(dateVal.getDate()).padStart(2,'0')+'.'+String(dateVal.getMonth()+1).padStart(2,'0')+'.'+dateVal.getFullYear();
+      if(!dateStr) return;
+      result.raw.push({date:dateStr, amount:credit, desc});
+      result.totalCredit += credit;
+      if(desc.startsWith('C3') || desc.includes('Возм. по согл. в СБП')) result.sbp[dateStr]=(result.sbp[dateStr]||0)+credit;
+      else if(desc.includes('ИП ТРИЛЕНКО') || desc.includes('Возм ')) result.acquiring[dateStr]=(result.acquiring[dateStr]||0)+credit;
+    });
+  });
+  return result;
+}
+
+// Берём данные прямо из уже загруженного allData
+function bankAppData(){
+  const byDate = {};
+  allData.forEach(r=>{
+    if(r.isReturn || r.pay==='Нал') return;
+    if(String(r.car||'').includes('ЗАКРЫТИЕ')) return;
+    const date = r.date;
+    if(!date) return;
+    if(!byDate[date]) byDate[date]={qr:0, on:0, total:0, cnt:0};
+    const amt=+r.amount||0;
+    byDate[date].total+=amt; byDate[date].cnt++;
+    if(r.pay==='QR') byDate[date].qr+=amt;
+    if(r.pay==='ОН') byDate[date].on+=amt;
+  });
+  return byDate;
+}
+
+function bankAddDays(dateStr, days){
+  const p=dateStr.split('.');
+  const d=new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+  d.setDate(d.getDate()+days);
+  return String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+d.getFullYear();
+}
+
+function bankRender(bank, app, filename){
+  const comm = bankCommission/100;
+  let html = `<div style="background:var(--s2);border:1px solid var(--accent);border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px">
+    <div style="font-size:20px">📄</div>
+    <div><div style="font-family:var(--ff);font-size:15px;color:var(--accent)">${filename}</div>
+    <div style="font-family:var(--fm);font-size:10px;color:var(--muted)">${bank.period} · ${bank.account}</div></div>
+    <div style="margin-left:auto;font-family:var(--ff);font-size:18px;color:var(--green)">${fmtMoney(bank.totalCredit)}₽</div>
+  </div>`;
+
+  const totalSbp = Object.values(bank.sbp).reduce((s,v)=>s+v,0);
+  const totalAcq = Object.values(bank.acquiring).reduce((s,v)=>s+v,0);
+  html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+    <div style="background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:12px"><div style="font-family:var(--fm);font-size:9px;color:var(--muted);letter-spacing:1px">СБП (QR) ПРИШЛО</div><div style="font-family:var(--ff);font-size:24px;color:var(--blue)">${fmtMoney(totalSbp)}₽</div><div style="font-family:var(--fm);font-size:9px;color:var(--muted)">в тот же день</div></div>
+    <div style="background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:12px"><div style="font-family:var(--fm);font-size:9px;color:var(--muted);letter-spacing:1px">ЭКВАЙРИНГ ПРИШЛО</div><div style="font-family:var(--ff);font-size:24px;color:var(--green)">${fmtMoney(totalAcq)}₽</div><div style="font-family:var(--fm);font-size:9px;color:var(--muted)">след. день −${bankCommission}%</div></div>
+  </div>`;
+
+  // СБП
+  html += `<div class="op-table"><div class="op-row header" style="grid-template-columns:60px 1fr 1fr 1fr 50px">
+    <div style="font-family:var(--fm);font-size:9px">Дата</div><div style="font-family:var(--fm);font-size:9px">Прилож.</div><div style="font-family:var(--fm);font-size:9px">Банк</div><div style="font-family:var(--fm);font-size:9px">Разн.</div><div style="font-family:var(--fm);font-size:9px">✓</div></div>`;
+  const allDates = new Set([...Object.keys(bank.sbp), ...(app?Object.keys(app):[])]);
+  [...allDates].sort((a,b)=>{const pa=a.split('.'),pb=b.split('.');return new Date(pa[2],pa[1]-1,pa[0])-new Date(pb[2],pb[1]-1,pb[0]);}).forEach(date=>{
+    const bankAmt=bank.sbp[date]||0;
+    const appAmt=app?(app[date]?.qr||0):0;
+    if(!bankAmt && !appAmt) return;
+    const diff=bankAmt-appAmt;
+    const isOk=Math.abs(diff)<50;
+    html+=`<div class="op-row" style="grid-template-columns:60px 1fr 1fr 1fr 50px">
+      <div style="font-family:var(--fm);font-size:11px;color:var(--accent)">${date.slice(0,5)}</div>
+      <div style="font-family:var(--fm);font-size:12px;color:var(--blue)">${appAmt?fmtMoney(appAmt)+'₽':'—'}</div>
+      <div style="font-family:var(--fm);font-size:12px;color:var(--green)">${bankAmt?fmtMoney(bankAmt)+'₽':'—'}</div>
+      <div style="font-family:var(--fm);font-size:11px;color:${diff>=0?'var(--green)':'var(--orange)'}">${diff>=0?'+':''}${fmtMoney(diff)}</div>
+      <div style="font-size:13px">${isOk?'✅':bankAmt===0?'⏳':'⚠️'}</div></div>`;
+  });
+  html+=`</div>`;
+
+  // Эквайринг
+  html += `<div class="op-table" style="margin-top:12px"><div class="op-row header" style="grid-template-columns:55px 55px 1fr 1fr 1fr 40px">
+    <div style="font-family:var(--fm);font-size:9px">Опл.</div><div style="font-family:var(--fm);font-size:9px">Приход</div><div style="font-family:var(--fm);font-size:9px">Прилож.</div><div style="font-family:var(--fm);font-size:9px">Ждём</div><div style="font-family:var(--fm);font-size:9px">Пришло</div><div style="font-family:var(--fm);font-size:9px">✓</div></div>`;
+  if(app){
+    [...Object.keys(app)].sort((a,b)=>{const pa=a.split('.'),pb=b.split('.');return new Date(pa[2],pa[1]-1,pa[0])-new Date(pb[2],pb[1]-1,pb[0]);}).forEach(appDate=>{
+      const appOnAmt=app[appDate]?.on||0;
+      if(!appOnAmt) return;
+      const expDate=bankAddDays(appDate,1);
+      const bankAmt=bank.acquiring[expDate]||0;
+      const expAmt=appOnAmt*(1-comm);
+      const diff=bankAmt-expAmt;
+      const isOk=bankAmt>0 && Math.abs(diff)<appOnAmt*0.05;
+      html+=`<div class="op-row" style="grid-template-columns:55px 55px 1fr 1fr 1fr 40px">
+        <div style="font-family:var(--fm);font-size:11px;color:var(--accent)">${appDate.slice(0,5)}</div>
+        <div style="font-family:var(--fm);font-size:10px;color:var(--muted)">${expDate.slice(0,5)}</div>
+        <div style="font-family:var(--fm);font-size:11px;color:var(--blue)">${fmtMoney(appOnAmt)}₽</div>
+        <div style="font-family:var(--fm);font-size:11px;color:var(--muted)">${fmtMoney(expAmt)}₽</div>
+        <div style="font-family:var(--fm);font-size:11px;color:${bankAmt?'var(--green)':'var(--muted)'}">${bankAmt?fmtMoney(bankAmt)+'₽':'⏳'}</div>
+        <div style="font-size:13px">${bankAmt===0?'⏳':isOk?'✅':'⚠️'}</div></div>`;
+    });
+  }
+  html+=`</div>`;
+  document.getElementById('bank-results').innerHTML = html;
+}
+
 function showFinance(el){
   document.querySelectorAll('.ptab').forEach(t=>t.classList.remove('on'));
   el.classList.add('on');
+  document.getElementById('custom-range').style.display = 'none';
   const now = new Date();
   loadFinance(now.getMonth()+1, now.getFullYear());
+}
+
+// ══════════ ЗАРПЛАТА ══════════
+// Настройки по умолчанию (можно менять прямо в интерфейсе)
+let salCfg = JSON.parse(localStorage.getItem('salCfg')||'null') || {
+  rate: 200,       // ₽ за час
+  pctMachine: 10,  // % с машинок и дрифтов
+  pctBatut: 10,    // % с батута и шарика
+  minShift: 2000   // минималка за выход
+};
+
+function showSalary(el){
+  document.querySelectorAll('.ptab').forEach(t=>t.classList.remove('on'));
+  el.classList.add('on');
+  document.getElementById('custom-range').style.display = 'none';
+
+  // По умолчанию — прошлая неделя (пн-вс)
+  const today = todayDate();
+  const todayDay = today.getDay() || 7;
+  const thisMonday = new Date(today); thisMonday.setDate(today.getDate()-todayDay+1);
+  const prevMonday = new Date(thisMonday); prevMonday.setDate(thisMonday.getDate()-7);
+  const prevSunday = new Date(thisMonday); prevSunday.setDate(thisMonday.getDate()-1);
+
+  if(!window.salFrom){ window.salFrom = prevMonday; window.salTo = prevSunday; }
+  renderSalary();
+}
+
+function rideType(car){
+  const c = String(car||'');
+  if(c.includes('Батут')) return 'batut';
+  if(c.includes('Шарик')) return 'sharik';
+  return 'machine'; // машинки и дрифты
+}
+
+function renderSalary(){
+  const from = window.salFrom, to = window.salTo;
+  const fromStr = from.toLocaleDateString('ru-RU');
+  const toStr = to.toLocaleDateString('ru-RU');
+
+  // Собираем данные за период
+  const inRange = allData.filter(r=>{
+    const d = parseDate(r.date);
+    return d && d >= from && d <= to;
+  });
+
+  // По операторам: часы (из строк закрытия смен) + выручка по типам
+  const ops = {};
+  const ensure = op => { if(!ops[op]) ops[op]={shifts:0, hours:0, revM:0, revB:0, cnt:0, days:new Set()}; return ops[op]; };
+
+  inRange.forEach(r=>{
+    const op = r.operator;
+    if(!op) return;
+    const car = String(r.car||'');
+    if(car.includes('ЗАКРЫТИЕ')){
+      // строка закрытия смены: "Смена 11.5ч" в причине
+      const o = ensure(op);
+      const m = String(r.returnReason||'').match(/([\d.]+)\s*ч/);
+      if(m){ o.hours += parseFloat(m[1]); o.shifts++; }
+      return;
+    }
+    if(r.isReturn) return;
+    const o = ensure(op);
+    const amt = +r.amount||0;
+    const t = rideType(car);
+    if(t==='machine') o.revM += amt; else o.revB += amt;
+    o.cnt++;
+    if(r.date) o.days.add(String(r.date).slice(0,10));
+  });
+
+  // Расчёт зарплаты
+  const rate=salCfg.rate, pM=salCfg.pctMachine, pB=salCfg.pctBatut, minS=salCfg.minShift;
+  let totalPayroll = 0;
+  const rowsHtml = Object.entries(ops)
+    .filter(([op])=> !['Гость1','Гость2'].includes(op) )
+    .sort((a,b)=>(b[1].revM+b[1].revB)-(a[1].revM+a[1].revB))
+    .map(([op,o])=>{
+      // Если смену не закрывали — часы берём 0, но минималку по дням всё равно даём
+      const shiftsForMin = o.shifts || o.days.size || 1;
+      const base = rate * o.hours;
+      const pct = Math.round(o.revM*pM/100 + o.revB*pB/100);
+      const raw = base + pct;
+      const minTotal = minS * shiftsForMin;
+      const total = Math.max(raw, minTotal);
+      totalPayroll += total;
+      const minApplied = total > raw;
+      const hoursWarn = o.hours===0 ? ' style="color:var(--orange)"' : '';
+      return `<div class="op-row" style="grid-template-columns:1.3fr 0.6fr 0.7fr 1fr 0.9fr 1fr">
+        <div><div class="op-name">${op}</div><div class="op-avg">${o.shifts} смен · ${o.cnt} прок.</div></div>
+        <div class="op-cnt"${hoursWarn}>${o.hours||'—'}ч</div>
+        <div class="op-cnt">${fmtMoney(base)}</div>
+        <div class="op-cnt">${fmtMoney(o.revM+o.revB)}₽<div class="op-avg">М ${fmtMoney(o.revM)} · Б ${fmtMoney(o.revB)}</div></div>
+        <div class="op-cnt">${fmtMoney(pct)}</div>
+        <div class="op-rev">${fmtMoney(total)}₽${minApplied?'<div class="op-avg" style="color:var(--orange)">мин.</div>':''}</div>
+      </div>`;
+    }).join('');
+
+  const html = `
+    <div style="padding:12px">
+      <div class="sec-title" style="margin-bottom:10px">🧮 РАСЧЁТ ЗАРПЛАТЫ</div>
+
+      <div style="background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="date" id="sal-from" value="${from.toISOString().slice(0,10)}" style="background:var(--s3);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:6px;font-family:var(--fm);font-size:12px;outline:none">
+        <span style="color:var(--muted)">—</span>
+        <input type="date" id="sal-to" value="${to.toISOString().slice(0,10)}" style="background:var(--s3);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:6px;font-family:var(--fm);font-size:12px;outline:none">
+        <button onclick="applySalDates()" style="background:var(--accent);border:none;color:#000;padding:6px 14px;border-radius:6px;font-family:var(--ff);font-size:14px;letter-spacing:1px;cursor:pointer">Считать</button>
+        <div style="font-family:var(--fm);font-size:10px;color:var(--green)">${fromStr} — ${toStr}</div>
+      </div>
+
+      <div style="background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:12px">
+        <div style="font-family:var(--fm);font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:8px">НАСТРОЙКИ РАСЧЁТА</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <label style="font-size:11px;color:var(--text)">₽/час <input type="number" id="cfg-rate" value="${salCfg.rate}" style="width:60px;background:var(--s3);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:4px;font-family:var(--fm);font-size:12px"></label>
+          <label style="font-size:11px;color:var(--text)">Мин/выход <input type="number" id="cfg-min" value="${salCfg.minShift}" style="width:70px;background:var(--s3);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:4px;font-family:var(--fm);font-size:12px"></label>
+          <label style="font-size:11px;color:var(--text)">% машинки <input type="number" id="cfg-pm" value="${salCfg.pctMachine}" style="width:50px;background:var(--s3);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:4px;font-family:var(--fm);font-size:12px"></label>
+          <label style="font-size:11px;color:var(--text)">% батут <input type="number" id="cfg-pb" value="${salCfg.pctBatut}" style="width:50px;background:var(--s3);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:4px;font-family:var(--fm);font-size:12px"></label>
+        </div>
+        <button onclick="saveSalCfg()" style="margin-top:8px;background:var(--s3);border:1px solid var(--border);color:var(--text);padding:6px 14px;border-radius:6px;font-family:var(--fm);font-size:11px;cursor:pointer">Применить настройки</button>
+      </div>
+
+      <div class="op-table">
+        <div class="op-row header" style="grid-template-columns:1.3fr 0.6fr 0.7fr 1fr 0.9fr 1fr">
+          <div style="font-family:var(--fm);font-size:9px">Оператор</div>
+          <div style="font-family:var(--fm);font-size:9px;text-align:center">Часы</div>
+          <div style="font-family:var(--fm);font-size:9px;text-align:center">Оклад</div>
+          <div style="font-family:var(--fm);font-size:9px;text-align:center">Выручка</div>
+          <div style="font-family:var(--fm);font-size:9px;text-align:center">%</div>
+          <div style="font-family:var(--fm);font-size:9px;text-align:right">К ВЫПЛАТЕ</div>
+        </div>
+        ${rowsHtml || '<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Нет данных за период</div>'}
+      </div>
+
+      <div style="background:var(--accent);border-radius:12px;padding:14px;margin-top:12px;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-family:var(--ff);font-size:16px;letter-spacing:1px;color:#000">ИТОГО ФОНД ЗП</div>
+        <div style="font-family:var(--ff);font-size:28px;color:#000">${fmtMoney(totalPayroll)}₽</div>
+      </div>
+
+      <div style="font-family:var(--fm);font-size:9px;color:var(--muted);margin-top:10px;line-height:1.6">
+        Оклад = ${salCfg.rate}₽ × часы (из закрытых смен). Часы «—» оранжевым = оператор не закрывал смену в приложении.<br>
+        % = машинки/дрифты ${salCfg.pctMachine}% + батут/шарик ${salCfg.pctBatut}%. Минималка ${salCfg.minShift}₽ за выход.<br>
+        Бонусы (задержка, чистота) и штрафы (опоздание, курение) добавляешь вручную — их система не видит.
+      </div>
+    </div>`;
+
+  document.getElementById('content').innerHTML = html;
+}
+
+function applySalDates(){
+  const f=document.getElementById('sal-from').value, t=document.getElementById('sal-to').value;
+  if(!f||!t){ alert('Выбери обе даты'); return; }
+  window.salFrom=new Date(f); window.salTo=new Date(t);
+  renderSalary();
+}
+
+function saveSalCfg(){
+  salCfg.rate = +document.getElementById('cfg-rate').value||200;
+  salCfg.minShift = +document.getElementById('cfg-min').value||2000;
+  salCfg.pctMachine = +document.getElementById('cfg-pm').value||10;
+  salCfg.pctBatut = +document.getElementById('cfg-pb').value||10;
+  localStorage.setItem('salCfg', JSON.stringify(salCfg));
+  renderSalary();
 }
 
 async function loadFinance(month, year){
