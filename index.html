@@ -364,12 +364,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);display:flex;f
 <script>
 let C=JSON.parse(localStorage.getItem('cfg4')||'{}');
 if(!C.url) C.url='https://script.google.com/macros/s/AKfycbxbEhl2IrF_zcoLk6aittPdpUp3PrZaIO2l8HiZmYco-seMpJ3BCE5e4-YaXdVXdq3o/exec';
-if(!C.ops) C.ops='Слава,Никита,Максим,Климентий,Александр,Виктор,Слава 2,Соня,Гость1,Гость2';
+if(!C.ops) C.ops='Никита,Максим,Климентий,Александр,Виктор,Слава 2,Соня,Дима,Егор,Гость1,Гость2';
 
 // PIN-коды операторов (имя → PIN)
 // Чтобы сменить PIN — поменяй цифры здесь и перезалей на Netlify
 const PINS = {
-  'Слава':      '1144',
   'Никита':     '2215',
   'Максим':     '3368',
   'Климентий':  '4412',
@@ -377,6 +376,8 @@ const PINS = {
   'Виктор':     '6632',
   'Слава 2':    '3232',
   'Соня':       '4455',
+  'Дима':       '3223',
+  'Егор':       '4545',
   'Гость1':     '0021',
   'Гость2':     '0053',
 };
