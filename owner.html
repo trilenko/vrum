@@ -181,9 +181,21 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);min-height:100
   <div class="ptab on" onclick="setPeriod('today',this)">Сегодня</div>
   <div class="ptab" onclick="setPeriod('yesterday',this)">Вчера</div>
   <div class="ptab" onclick="setPeriod('week',this)">7 дней</div>
+  <div class="ptab" onclick="setPeriod('prevweek',this)">Прош. неделя</div>
   <div class="ptab" onclick="setPeriod('month',this)">30 дней</div>
   <div class="ptab" onclick="setPeriod('all',this)">Всё время</div>
+  <div class="ptab" onclick="showCustom(this)">📅 Период</div>
   <div class="ptab" onclick="showFinance(this)">💰 Финансы</div>
+</div>
+
+<!-- Кастомный период -->
+<div id="custom-range" style="display:none;background:var(--s2);border-bottom:1px solid var(--border);padding:10px 16px;display:none;gap:10px;align-items:center;flex-wrap:wrap">
+  <div style="font-family:var(--fm);font-size:10px;color:var(--muted);letter-spacing:1px">ПЕРИОД:</div>
+  <input type="date" id="date-from" style="background:var(--s3);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-family:var(--fm);font-size:12px;outline:none">
+  <div style="color:var(--muted);font-size:12px">—</div>
+  <input type="date" id="date-to" style="background:var(--s3);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-family:var(--fm);font-size:12px;outline:none">
+  <button onclick="applyCustom()" style="background:var(--accent);border:none;color:#000;padding:6px 14px;border-radius:6px;font-family:var(--ff);font-size:14px;letter-spacing:1px;cursor:pointer">OK</button>
+  <div id="custom-label" style="font-family:var(--fm);font-size:10px;color:var(--green)"></div>
 </div>
 
 <div class="content" id="content">
@@ -207,10 +219,32 @@ setInterval(()=>{
     '<b>'+n.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit',second:'2-digit'})+'</b>';
 },1000);
 
+let customFrom = null, customTo = null;
+
+function showCustom(el){
+  document.querySelectorAll('.ptab').forEach(t=>t.classList.remove('on'));
+  el.classList.add('on');
+  const cr = document.getElementById('custom-range');
+  cr.style.display = cr.style.display === 'none' ? 'flex' : 'none';
+}
+
+function applyCustom(){
+  const f = document.getElementById('date-from').value;
+  const t = document.getElementById('date-to').value;
+  if(!f || !t){ alert('Выбери обе даты'); return; }
+  customFrom = new Date(f);
+  customTo   = new Date(t);
+  period = 'custom';
+  document.getElementById('custom-label').textContent =
+    customFrom.toLocaleDateString('ru-RU') + ' — ' + customTo.toLocaleDateString('ru-RU');
+  render();
+}
+
 function setPeriod(p, el){
   period = p;
   document.querySelectorAll('.ptab').forEach(t=>t.classList.remove('on'));
   el.classList.add('on');
+  document.getElementById('custom-range').style.display = 'none';
   render();
 }
 
@@ -271,6 +305,17 @@ function filterByPeriod(rows){
     if(period === 'week'){
       const w = new Date(today); w.setDate(w.getDate()-6);
       return d >= w;
+    }
+    if(period === 'prevweek'){
+      // Прошлая неделя: пн-вс прошлой недели
+      const todayDay = today.getDay() || 7; // 1=пн 7=вс
+      const thisMonday = new Date(today); thisMonday.setDate(today.getDate() - todayDay + 1);
+      const prevMonday = new Date(thisMonday); prevMonday.setDate(thisMonday.getDate() - 7);
+      const prevSunday = new Date(thisMonday); prevSunday.setDate(thisMonday.getDate() - 1);
+      return d >= prevMonday && d <= prevSunday;
+    }
+    if(period === 'custom' && customFrom && customTo){
+      return d >= customFrom && d <= customTo;
     }
     if(period === 'month'){
       const m = new Date(today); m.setDate(m.getDate()-29);
