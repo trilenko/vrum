@@ -245,7 +245,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);display:flex;f
 <!-- ПРОКАТ -->
 <div class="page on" id="page-main">
   <div class="shift">
-    <select id="ptsel" onchange="onPtChange()"><option>Цесаревича</option><option>Татарка</option></select>
+    <select id="ptsel" onchange="onPtChange()"><option>Цесаревича</option><option>Татарка</option><option>Ахлест</option></select>
   </div>
   <div id="shift-bar-wrap"></div>
   <div class="syncbar">
@@ -527,11 +527,17 @@ const VEHICLES = {
     cars:   [27, 28, 35, 15, 16],
     bats:   10,
   },
+  'Ахлест': {
+    drifts: [],
+    cars:   [],
+    bats:   0,
+  },
 };
 
 const PT_CFG={
   'Цесаревича':{hasDrift:true},
   'Татарка':   {hasDrift:false},
+  'Ахлест':    {hasDrift:false},
 };
 
 function getCurPt(){return document.getElementById('ptsel')?.value||'Цесаревича';}
@@ -543,7 +549,7 @@ function buildGrids(){
   const drifts=veh.drifts, cars=veh.cars, bc=veh.bats;
   const col=n=>n<=8?'g4':n<=15?'g5':'g6';
 
-  const ptPrefix=pt==='Цесаревича'?'ц':'т';
+  const ptPrefix=pt==='Цесаревича'?'ц':pt==='Татарка'?'т':'а';
 
   // Дрифты — скрываем на Татарке
   document.getElementById('drift-sec').style.display=cfg.hasDrift&&drifts.length?'':'none';
@@ -616,7 +622,7 @@ function updFree(){
   const pt=getCurPt();
   const cfg=PT_CFG[pt]||PT_CFG['Цесаревича'];
   const veh=VEHICLES[pt]||VEHICLES['Цесаревича'];
-  const pfx=pt==='Цесаревича'?'ц':'т';
+  const pfx=pt==='Цесаревича'?'ц':pt==='Татарка'?'т':'а';
   const dFree=veh.drifts.filter(n=>!active[pfx+'d'+n]).length;
   const cFree=veh.cars.filter(n=>!active[pfx+'c'+n]).length;
   if(cfg.hasDrift&&veh.drifts.length) document.getElementById('d-info').textContent=`${dFree} своб · 500₽ · 15мин`;
