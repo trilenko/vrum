@@ -260,8 +260,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);display:flex;f
   <div id="drift-sec"><div class="sec"><div class="sec-hd">🏎️ ДРИФТЫ <em id="d-info"></em></div></div>
   <div class="vgrid g5" id="d-grid"></div></div>
 
-  <div class="sec"><div class="sec-hd">🤸 БАТУТ <em>20 мин · 400₽</em></div></div>
-  <div class="bgrid" id="b-grid"></div>
+  <div id="bat-sec"><div class="sec"><div class="sec-hd">🤸 БАТУТ <em>20 мин · 400₽</em></div></div>
+  <div class="bgrid" id="b-grid"></div></div>
 
   <div class="sec"><div class="sec-hd">🎯 ЛОПНИ ШАРИК <em>1 игра · 300₽</em></div></div>
   <div class="sh-box">
@@ -574,6 +574,7 @@ function buildGrids(){
   const ptPrefix=pt==='Цесаревича'?'ц':pt==='Татарка'?'т':'а';
 
   document.getElementById('drift-sec').style.display=(cfg.hasDrift||pt==='Ахлест')&&drifts.length?'':'none';
+  document.getElementById('bat-sec').style.display=bc>0?'':'none';
 
   const dg=document.getElementById('d-grid');
   dg.className='vgrid '+col(drifts.length);dg.innerHTML='';
@@ -764,7 +765,10 @@ function addSharik(pay){
 function renderSh(){document.getElementById('sh-cnt').textContent=sh.c;document.getElementById('sh-sum').textContent=sh.t;}
 
 function alerts(){
+  const pt = getCurPt();
+  const pfx = pt==='Цесаревича'?'ц':pt==='Татарка'?'т':'а';
   const done=Object.keys(active).filter(id=>{
+    if(!id.startsWith(pfx)) return false; // только текущая точка
     const a=active[id];
     return Math.floor((Date.now()-a.ms)/1000)>=DUR[a.tp];
   }).map(id=>{
