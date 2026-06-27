@@ -473,8 +473,30 @@ function init(){
   buildGrids();renderSh();renderLog();renderSal();renderShiftBar();syncUI();
   setInterval(tick,1000);setInterval(alerts,4000);
   setInterval(pollActive,5000);
-  // Обновляем счётчик часов каждую минуту
   setInterval(()=>{ renderShiftBar(); renderSal(); }, 60000);
+}
+
+// Смена точки — перестраиваем сетку, убираем из active чужие префиксы
+function onPtChange(){
+  const pt = getCurPt();
+  const myPfx = pt==='Цесаревича'?'ц':pt==='Татарка'?'т':'а';
+  const allPfx = ['ц','т','а'];
+  const otherPfx = allPfx.filter(p=>p!==myPfx);
+
+  // Убираем из active машинки других точек (только чужие устройства)
+  let changed = false;
+  Object.keys(active).forEach(id=>{
+    const a = active[id];
+    // если ID начинается с префикса другой точки — удаляем
+    if(otherPfx.some(p=>id.startsWith(p))){
+      delete active[id]; changed = true;
+    }
+  });
+  if(changed) localStorage.setItem('active4', JSON.stringify(active));
+
+  buildGrids();
+  renderShiftBar();
+  renderSal();
 }
 
 // Точка входа — запускается при загрузке страницы
@@ -630,9 +652,12 @@ function updFree(){
   const cfg=PT_CFG[pt]||PT_CFG['Цесаревича'];
   const veh=VEHICLES[pt]||VEHICLES['Цесаревича'];
   const pfx=pt==='Цесаревича'?'ц':pt==='Татарка'?'т':'а';
-  const dFree=veh.drifts.filter(n=>!active[pfx+'d'+n]).length;
-  const cFree=veh.cars.filter(n=>!active[pfx+'c'+n]).length;
-  if(cfg.hasDrift&&veh.drifts.length) document.getElementById('d-info').textContent=`${dFree} своб · 500₽ · 15мин`;
+
+  // Считаем свободные с учётом безымянных (_x0, _x1...)
+  const dFree=veh.drifts.filter((n,i)=>!active[n===0?pfx+'d_x'+i:pfx+'d'+n]).length;
+  const cFree=veh.cars.filter((n,i)=>!active[n===0?pfx+'c_x'+i:pfx+'c'+n]).length;
+
+  if((cfg.hasDrift||pt==='Ахлест')&&veh.drifts.length) document.getElementById('d-info').textContent=`${dFree} своб · 500₽ · 15мин`;
   document.getElementById('c-info').textContent=`${cFree} своб · 500₽ · 15мин`;
 }
 
