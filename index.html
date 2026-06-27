@@ -519,17 +519,17 @@ function isBat(id){ return idType(id)==='bat'; }
 const VEHICLES = {
   'Цесаревича': {
     drifts: [6, 53, 56, 18, 46, 41, 57, 2, 43],
-    cars:   [47, 11, 42, 59, 45, 19, 1, 49, 58, 8, 7, 39, 38, 52, 32],
+    cars:   [47, 11, 42, 59, 45, 19, 1, 49, 58, 8, 7, 39, 52, 32],
     bats:   20,
   },
   'Татарка': {
     drifts: [],
-    cars:   [27, 28, 35, 15, 16],
+    cars:   [28, 35],
     bats:   10,
   },
   'Ахлест': {
-    drifts: [],
-    cars:   [],
+    drifts: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    cars:   [15, 16, 27, 38, 0, 0, 0, 0, 0],
     bats:   0,
   },
 };
@@ -551,16 +551,23 @@ function buildGrids(){
 
   const ptPrefix=pt==='Цесаревича'?'ц':pt==='Татарка'?'т':'а';
 
-  // Дрифты — скрываем на Татарке
-  document.getElementById('drift-sec').style.display=cfg.hasDrift&&drifts.length?'':'none';
+  document.getElementById('drift-sec').style.display=(cfg.hasDrift||pt==='Ахлест')&&drifts.length?'':'none';
 
   const dg=document.getElementById('d-grid');
   dg.className='vgrid '+col(drifts.length);dg.innerHTML='';
-  if(cfg.hasDrift) drifts.forEach(num=>dg.appendChild(mkVC(ptPrefix+'d'+num,'🏎️',num,'drift')));
+  if(cfg.hasDrift||pt==='Ахлест') drifts.forEach((num,i)=>{
+    const label = num===0 ? '?' : num;
+    const uid = num===0 ? ptPrefix+'d_x'+i : ptPrefix+'d'+num;
+    dg.appendChild(mkVC(uid,'🏎️',label,'drift'));
+  });
 
   const cg=document.getElementById('c-grid');
   cg.className='vgrid '+col(cars.length);cg.innerHTML='';
-  cars.forEach(num=>cg.appendChild(mkVC(ptPrefix+'c'+num,'🚗',num,'car')));
+  cars.forEach((num,i)=>{
+    const label = num===0 ? '?' : num;
+    const uid = num===0 ? ptPrefix+'c_x'+i : ptPrefix+'c'+num;
+    cg.appendChild(mkVC(uid,'🚗',label,'car'));
+  });
 
   const bg=document.getElementById('b-grid');bg.innerHTML='';
   for(let i=1;i<=bc;i++)bg.appendChild(mkBC(ptPrefix+'b'+i,i));
