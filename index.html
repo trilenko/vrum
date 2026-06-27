@@ -251,6 +251,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);display:flex;f
   <div class="syncbar">
     <div class="sinfo"><div class="sdot" id="sdot2"></div><span id="stext">Синхронизация не настроена</span></div>
     <button class="cfg-btn" onclick="openCfg()">⚙ Настройки</button>
+    <button class="cfg-btn" style="color:var(--orange);border-color:var(--orange)" onclick="if(confirm('Сбросить активные прокаты?')){active={};localStorage.setItem('active4','{}');buildGrids();showToast('Сброшено ✓');}">✕ Сброс</button>
   </div>
   <div class="alert-banner" id="alert"></div>
 
@@ -470,6 +471,7 @@ const DUR={drift:900,car:900,bat:1200};
 let pid=null,retR=null;
 
 function init(){
+  cleanActiveForPoint();
   buildGrids();renderSh();renderLog();renderSal();renderShiftBar();syncUI();
   setInterval(tick,1000);setInterval(alerts,4000);
   setInterval(pollActive,5000);
@@ -480,23 +482,27 @@ function init(){
 function onPtChange(){
   const pt = getCurPt();
   const myPfx = pt==='Цесаревича'?'ц':pt==='Татарка'?'т':'а';
-  const allPfx = ['ц','т','а'];
-  const otherPfx = allPfx.filter(p=>p!==myPfx);
 
-  // Убираем из active машинки других точек (только чужие устройства)
-  let changed = false;
+  // Удаляем ВСЕ активные прокаты которые не принадлежат текущей точке
   Object.keys(active).forEach(id=>{
-    const a = active[id];
-    // если ID начинается с префикса другой точки — удаляем
-    if(otherPfx.some(p=>id.startsWith(p))){
-      delete active[id]; changed = true;
-    }
+    if(!id.startsWith(myPfx)){ delete active[id]; }
   });
-  if(changed) localStorage.setItem('active4', JSON.stringify(active));
+  localStorage.setItem('active4', JSON.stringify(active));
 
   buildGrids();
   renderShiftBar();
   renderSal();
+}
+
+// Очищаем чужие активные при старте
+function cleanActiveForPoint(){
+  const pt = getCurPt();
+  const myPfx = pt==='Цесаревича'?'ц':pt==='Татарка'?'т':'а';
+  let changed = false;
+  Object.keys(active).forEach(id=>{
+    if(!id.startsWith(myPfx)){ delete active[id]; changed=true; }
+  });
+  if(changed) localStorage.setItem('active4', JSON.stringify(active));
 }
 
 // Точка входа — запускается при загрузке страницы
