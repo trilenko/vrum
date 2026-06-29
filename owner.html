@@ -351,9 +351,10 @@ function render(){
     else if(n.includes('дрифт')||n.includes('машин')||n.includes('маш')){ byType['Машинки'].cnt++; byType['Машинки'].rev+=amount; }
   });
 
-  // По точкам
-  const byPoint = {};
+  // По точкам — показываем все три всегда
+  const byPoint = {'Цесаревича':{cnt:0,rev:0},'Татарка':{cnt:0,rev:0},'Ахлест':{cnt:0,rev:0}};
   rows.forEach(r=>{
+    if(!r.point) return;
     if(!byPoint[r.point]) byPoint[r.point]={cnt:0,rev:0};
     byPoint[r.point].cnt++; byPoint[r.point].rev+=(+r.amount||0);
   });
@@ -367,12 +368,24 @@ function render(){
     byOp[r.operator].cnt++; byOp[r.operator].rev+=(+r.amount||0);
   });
 
-  // По машинкам
+  // По машинкам + учёт поломок
   const byVeh = {};
+  const repairs = {};
   rows.forEach(r=>{
     if(!r.car) return;
-    if(!byVeh[r.car]) byVeh[r.car]={cnt:0,rev:0};
-    byVeh[r.car].cnt++; byVeh[r.car].rev+=(+r.amount||0);
+    const car = String(r.car);
+    // Строки ремонта — отдельно
+    if(car.includes('РЕМОНТ') || r.pay==='РЕМОНТ'){
+      const m = car.match(/№\s*(\d+)/);
+      const key = m ? '№'+m[1] : car;
+      if(!repairs[key]) repairs[key]={cnt:0, reasons:[]};
+      repairs[key].cnt++;
+      if(r.reason) repairs[key].reasons.push(r.reason);
+      return;
+    }
+    if(car.includes('ЗАКРЫТИЕ')) return;
+    if(!byVeh[car]) byVeh[car]={cnt:0,rev:0};
+    byVeh[car].cnt++; byVeh[car].rev+=(+r.amount||0);
   });
 
   // По оплате
@@ -592,7 +605,35 @@ function render(){
     html+=`</div></div>`;
   }
 
-  // Способы оплаты
+  // Поломки
+  const sortedRepairs = Object.entries(repairs).sort((a,b)=>b[1].cnt-a[1].cnt);
+  if(sortedRepairs.length>0){
+    const totalRepairs = sortedRepairs.reduce((s,[,d])=>s+d.cnt,0);
+    html+=`<div class="sec"><div class="sec-title">🔧 ПОЛОМКИ (${totalRepairs})</div>
+    <div class="veh-table">`;
+    sortedRepairs.forEach(([veh,d])=>{
+      const reasonsSummary = {};
+      d.reasons.forEach(r=>{
+        const cat = r.split(':')[0].trim();
+        reasonsSummary[cat] = (reasonsSummary[cat]||0)+1;
+      });
+      const reasonsStr = Object.entries(reasonsSummary).map(([c,n])=>`${c}${n>1?' ×'+n:''}`).join(', ');
+      const alert = d.cnt>=3 ? ' style="border-left:3px solid var(--red)"' : '';
+      html+=`<div class="veh-row"${alert}>
+        <div style="font-size:16px">${d.cnt>=3?'🔴':'🔧'}</div>
+        <div>
+          <div class="veh-name">${veh}${d.cnt>=3?' — часто ломается!':''}</div>
+          <div style="font-family:var(--fm);font-size:9px;color:var(--muted)">${reasonsStr||'—'}</div>
+        </div>
+        <div class="veh-cnt">${d.cnt}×</div>
+        <div class="veh-rev"></div>
+      </div>`;
+    });
+    html+=`</div>
+    <div style="font-family:var(--fm);font-size:9px;color:var(--muted);margin-top:8px;line-height:1.5">🔴 = сломалась 3+ раз за период — проверь или замени узел</div>
+    </div>`;
+  }
+
   const payTotal = Object.values(byPay).reduce((s,v)=>s+v,0);
   if(payTotal>0){
     html+=`<div class="sec"><div class="sec-title">💳 СПОСОБЫ ОПЛАТЫ</div>
@@ -827,10 +868,10 @@ function showFinance(el){
 // ══════════ ЗАРПЛАТА ══════════
 // Настройки по умолчанию (можно менять прямо в интерфейсе)
 let salCfg = JSON.parse(localStorage.getItem('salCfg')||'null') || {
-  rate: 200,       // ₽ за час
+  oklad: 1000,     // ₽ оклад за выход
   pctMachine: 10,  // % с машинок и дрифтов
   pctBatut: 10,    // % с батута и шарика
-  minShift: 2000   // минималка за выход
+  minShift: 3000   // минимальная гарантия за выход
 };
 
 function showSalary(el){
@@ -892,29 +933,27 @@ function renderSalary(){
   });
 
   // Расчёт зарплаты
-  const rate=salCfg.rate, pM=salCfg.pctMachine, pB=salCfg.pctBatut, minS=salCfg.minShift;
+  const oklad=salCfg.oklad, pM=salCfg.pctMachine, pB=salCfg.pctBatut, minS=salCfg.minShift;
   let totalPayroll = 0;
   const rowsHtml = Object.entries(ops)
     .filter(([op])=> !['Гость1','Гость2'].includes(op) )
     .sort((a,b)=>(b[1].revM+b[1].revB)-(a[1].revM+a[1].revB))
     .map(([op,o])=>{
-      // Если смену не закрывали — часы берём 0, но минималку по дням всё равно даём
       const shiftsForMin = o.shifts || o.days.size || 1;
-      const base = rate * o.hours;
+      const baseOklad = oklad * shiftsForMin;
       const pct = Math.round(o.revM*pM/100 + o.revB*pB/100);
-      const raw = base + pct;
+      const raw = baseOklad + pct;
       const minTotal = minS * shiftsForMin;
       const total = Math.max(raw, minTotal);
       totalPayroll += total;
       const minApplied = total > raw;
-      const hoursWarn = o.hours===0 ? ' style="color:var(--orange)"' : '';
-      return `<div class="op-row" style="grid-template-columns:1.3fr 0.6fr 0.7fr 1fr 0.9fr 1fr">
-        <div><div class="op-name">${op}</div><div class="op-avg">${o.shifts} смен · ${o.cnt} прок.</div></div>
-        <div class="op-cnt"${hoursWarn}>${o.hours||'—'}ч</div>
-        <div class="op-cnt">${fmtMoney(base)}</div>
+      return `<div class="op-row" style="grid-template-columns:1.3fr 0.7fr 0.7fr 1fr 0.9fr 1fr">
+        <div><div class="op-name">${op}</div><div class="op-avg">${shiftsForMin} смен · ${o.cnt} прок.</div></div>
+        <div class="op-cnt">${fmtMoney(baseOklad)}</div>
+        <div class="op-cnt"></div>
         <div class="op-cnt">${fmtMoney(o.revM+o.revB)}₽<div class="op-avg">М ${fmtMoney(o.revM)} · Б ${fmtMoney(o.revB)}</div></div>
         <div class="op-cnt">${fmtMoney(pct)}</div>
-        <div class="op-rev">${fmtMoney(total)}₽${minApplied?'<div class="op-avg" style="color:var(--orange)">мин.</div>':''}</div>
+        <div class="op-rev">${fmtMoney(total)}₽${minApplied?'<div class="op-avg" style="color:var(--orange)">гар. '+minS+'</div>':''}</div>
       </div>`;
     }).join('');
 
@@ -933,8 +972,8 @@ function renderSalary(){
       <div style="background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:12px">
         <div style="font-family:var(--fm);font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:8px">НАСТРОЙКИ РАСЧЁТА</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <label style="font-size:11px;color:var(--text)">₽/час <input type="number" id="cfg-rate" value="${salCfg.rate}" style="width:60px;background:var(--s3);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:4px;font-family:var(--fm);font-size:12px"></label>
-          <label style="font-size:11px;color:var(--text)">Мин/выход <input type="number" id="cfg-min" value="${salCfg.minShift}" style="width:70px;background:var(--s3);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:4px;font-family:var(--fm);font-size:12px"></label>
+          <label style="font-size:11px;color:var(--text)">Оклad/выход <input type="number" id="cfg-oklad" value="${salCfg.oklad}" style="width:70px;background:var(--s3);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:4px;font-family:var(--fm);font-size:12px"></label>
+          <label style="font-size:11px;color:var(--text)">Гарантия <input type="number" id="cfg-min" value="${salCfg.minShift}" style="width:70px;background:var(--s3);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:4px;font-family:var(--fm);font-size:12px"></label>
           <label style="font-size:11px;color:var(--text)">% машинки <input type="number" id="cfg-pm" value="${salCfg.pctMachine}" style="width:50px;background:var(--s3);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:4px;font-family:var(--fm);font-size:12px"></label>
           <label style="font-size:11px;color:var(--text)">% батут <input type="number" id="cfg-pb" value="${salCfg.pctBatut}" style="width:50px;background:var(--s3);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:4px;font-family:var(--fm);font-size:12px"></label>
         </div>
@@ -942,10 +981,10 @@ function renderSalary(){
       </div>
 
       <div class="op-table">
-        <div class="op-row header" style="grid-template-columns:1.3fr 0.6fr 0.7fr 1fr 0.9fr 1fr">
+        <div class="op-row header" style="grid-template-columns:1.3fr 0.7fr 0.7fr 1fr 0.9fr 1fr">
           <div style="font-family:var(--fm);font-size:9px">Оператор</div>
-          <div style="font-family:var(--fm);font-size:9px;text-align:center">Часы</div>
           <div style="font-family:var(--fm);font-size:9px;text-align:center">Оклад</div>
+          <div style="font-family:var(--fm);font-size:9px;text-align:center"></div>
           <div style="font-family:var(--fm);font-size:9px;text-align:center">Выручка</div>
           <div style="font-family:var(--fm);font-size:9px;text-align:center">%</div>
           <div style="font-family:var(--fm);font-size:9px;text-align:right">К ВЫПЛАТЕ</div>
@@ -959,9 +998,9 @@ function renderSalary(){
       </div>
 
       <div style="font-family:var(--fm);font-size:9px;color:var(--muted);margin-top:10px;line-height:1.6">
-        Оклад = ${salCfg.rate}₽ × часы (из закрытых смен). Часы «—» оранжевым = оператор не закрывал смену в приложении.<br>
-        % = машинки/дрифты ${salCfg.pctMachine}% + батут/шарик ${salCfg.pctBatut}%. Минималка ${salCfg.minShift}₽ за выход.<br>
-        Бонусы (задержка, чистота) и штрафы (опоздание, курение) добавляешь вручную — их система не видит.
+        Оклад ${salCfg.oklad}₽ за выход + % с прокатов. Если меньше ${salCfg.minShift}₽ — платится гарантия ${salCfg.minShift}₽.<br>
+        % = машинки/дрифты ${salCfg.pctMachine}% + батут/шарик ${salCfg.pctBatut}%.<br>
+        Такси после 22:00, бонусы и штрафы добавляешь вручную — их система не видит.
       </div>
     </div>`;
 
@@ -976,8 +1015,8 @@ function applySalDates(){
 }
 
 function saveSalCfg(){
-  salCfg.rate = +document.getElementById('cfg-rate').value||200;
-  salCfg.minShift = +document.getElementById('cfg-min').value||2000;
+  salCfg.oklad = +document.getElementById('cfg-oklad').value||1000;
+  salCfg.minShift = +document.getElementById('cfg-min').value||3000;
   salCfg.pctMachine = +document.getElementById('cfg-pm').value||10;
   salCfg.pctBatut = +document.getElementById('cfg-pb').value||10;
   localStorage.setItem('salCfg', JSON.stringify(salCfg));
